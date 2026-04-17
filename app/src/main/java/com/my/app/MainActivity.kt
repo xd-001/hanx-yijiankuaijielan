@@ -5,6 +5,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -12,13 +13,13 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -29,7 +30,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btn = Button(this).apply {
-            text = "✨ 启动/刷新 并隐藏界面 ✨"
+            text = "✨ 启动并隐藏界面 ✨"
             textSize = 18f
             setPadding(0, 20, 0, 20)
             setOnClickListener {
@@ -39,17 +40,15 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     startService(intent)
                 }
-                Toast.makeText(this@MainActivity, "已生效！App已隐藏至后台", Toast.LENGTH_SHORT).show()
-                
-                // 关键两行代码：点击后瞬间退到后台并关闭界面
-                moveTaskToBack(true)
-                finish()
+                Toast.makeText(this@MainActivity, "已生效！下拉通知栏查看", Toast.LENGTH_SHORT).show()
+                this@MainActivity.moveTaskToBack(true)
+                this@MainActivity.finish()
             }
         }
         layout.addView(btn)
 
         val text = TextView(this).apply { 
-            text = "请勾选你要放在通知栏的应用\n（选完后点击上方按钮即可）："
+            text = "请勾选常用应用（最多支持 30 个）："
             textSize = 15f
             setPadding(0, 30, 0, 20) 
         }
@@ -60,25 +59,40 @@ class MainActivity : AppCompatActivity() {
         setContentView(layout)
 
         val pm = packageManager
-        val intent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(intent, 0)
-        
+        val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER), 0)
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        val appNames = apps.map { it.loadLabel(pm).toString() }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_multiple_choice, appNames)
-        listView.adapter = adapter
-        listView.choiceMode = ListView.CHOICE_MODE_MULTIPLE
 
-        apps.forEachIndexed { index, resolveInfo ->
-            if (prefs.getBoolean(resolveInfo.activityInfo.packageName, false)) {
-                listView.setItemChecked(index, true)
+        // 核心升级：带有图标的自定义列表适配器！
+        val adapter = object : BaseAdapter() {
+            override fun getCount() = apps.size
+            override fun getItem(pos: Int) = apps[pos]
+            override fun getItemId(pos: Int) = pos.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                val row = (convertView as? LinearLayout) ?: LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(20, 30, 20, 30)
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    
+                    addView(ImageView(this@MainActivity).apply { id = 1001; layoutParams = LinearLayout.LayoutParams(100, 100) })
+                    addView(TextView(this@MainActivity).apply { id = 1002; textSize = 16f; setPadding(40, 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
+                    addView(CheckBox(this@MainActivity).apply { id = 1003; isClickable = false })
+                }
+                val app = apps[position]
+                val pkg = app.activityInfo.packageName
+                
+                row.findViewById<ImageView>(1001).setImageDrawable(app.loadIcon(pm))
+                row.findViewById<TextView>(1002).text = app.loadLabel(pm)
+                row.findViewById<CheckBox>(1003).isChecked = prefs.getBoolean(pkg, false)
+                return row
             }
         }
-
-        listView.setOnItemClickListener { _, _, position, _ ->
+        listView.adapter = adapter
+        
+        listView.setOnItemClickListener { _, view, position, _ ->
             val pkg = apps[position].activityInfo.packageName
-            val isChecked = listView.isItemChecked(position)
+            val isChecked = !prefs.getBoolean(pkg, false)
             prefs.edit().putBoolean(pkg, isChecked).apply()
+            view.findViewById<CheckBox>(1003).isChecked = isChecked
         }
     }
 }
@@ -87,14 +101,8 @@ class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        if (drawable is BitmapDrawable && drawable.bitmap != null) {
-            return drawable.bitmap
-        }
-        val bitmap = Bitmap.createBitmap(
-            if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 100,
-            if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 100,
-            Bitmap.Config.ARGB_8888
-        )
+        if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
+        val bitmap = Bitmap.createBitmap(if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 100, if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 100, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)
@@ -112,22 +120,25 @@ class QuickService : Service() {
         val allApps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER), 0)
         
         val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
-        val iconIds = arrayOf(R.id.icon0, R.id.icon1, R.id.icon2, R.id.icon3, R.id.icon4, R.id.icon5, R.id.icon6, R.id.icon7, R.id.icon8, R.id.icon9)
         var count = 0
 
         for (app in allApps) {
             val pkg = app.activityInfo.packageName
-            if (prefs.getBoolean(pkg, false) && count < 10) { 
+            // 扩容到了 30 个！
+            if (prefs.getBoolean(pkg, false) && count < 30) { 
                 val launchIntent = pm.getLaunchIntentForPackage(pkg)
                 if (launchIntent != null) {
                     val pi = PendingIntent.getActivity(this, count, launchIntent, PendingIntent.FLAG_IMMUTABLE)
-                    val iconDrawable = app.loadIcon(pm)
-                    val bitmap = drawableToBitmap(iconDrawable)
+                    val bitmap = drawableToBitmap(app.loadIcon(pm))
                     
-                    remoteViews.setImageViewBitmap(iconIds[count], bitmap)
-                    remoteViews.setViewVisibility(iconIds[count], View.VISIBLE)
-                    remoteViews.setOnClickPendingIntent(iconIds[count], pi)
-                    count++
+                    // 动态获取 XML 里那 30 个图标的位置
+                    val resId = resources.getIdentifier("icon$count", "id", packageName)
+                    if (resId != 0) {
+                        remoteViews.setImageViewBitmap(resId, bitmap)
+                        remoteViews.setViewVisibility(resId, View.VISIBLE)
+                        remoteViews.setOnClickPendingIntent(resId, pi)
+                        count++
+                    }
                 }
             }
         }
@@ -138,9 +149,11 @@ class QuickService : Service() {
             Notification.Builder(this)
         }
         
-        builder.setSmallIcon(android.R.drawable.star_on)
+        builder.setSmallIcon(android.R.color.transparent) // 核心：使用透明颜色替代难看的星星图标！
+               .setContentTitle("") // 核心：清空自带的标题
                .setOngoing(true)
-               .setCustomContentView(remoteViews)
+               .setCustomContentView(remoteViews) // 默认折叠视图
+               .setCustomBigContentView(remoteViews) // 核心：展开大视图（有了这个才能显示 3 行！）
 
         startForeground(1, builder.build())
         return START_STICKY
