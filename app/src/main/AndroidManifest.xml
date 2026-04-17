@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 允许在最新系统弹出通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- 允许读取手机里安装了哪些应用 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    <application android:label="快捷启动栏" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
+    <application android:label="快捷启动" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        <!-- 注意下面这行新增了 excludeFromRecents="true"，意思是不要在最近任务列表中显示 -->
+        <activity android:name=".MainActivity" android:exported="true" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
