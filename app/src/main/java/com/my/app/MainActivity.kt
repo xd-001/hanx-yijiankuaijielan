@@ -9,7 +9,6 @@ import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
@@ -102,22 +101,16 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
-    // 核心升级：精美的网格多选器！
     private fun showGridAddDialog() {
         val pm = packageManager
-        
-        // 动态构建一个网格视图
         val gridView = GridView(this).apply {
-            numColumns = 4 // 一行展示 4 个 App，找起来极快
+            numColumns = 4 
             verticalSpacing = 20
             horizontalSpacing = 10
             setPadding(20, 20, 20, 20)
         }
 
-        // 把还没有选中的 App 过滤出来
         val unselectedApps = allApps.filter { !selectedApps.contains(it.activityInfo.packageName) }
-        
-        // 临时记录本次弹出框里用户点击打钩了哪些
         val tempSelectedPkgs = mutableSetOf<String>()
 
         val adapter = object : BaseAdapter() {
@@ -136,14 +129,12 @@ class MainActivity : AppCompatActivity() {
                 imgIcon.setImageDrawable(app.loadIcon(pm))
                 tvName.text = app.loadLabel(pm)
                 
-                // 如果用户刚刚点击了它，显示绿色遮罩
                 mask.visibility = if (tempSelectedPkgs.contains(pkg)) View.VISIBLE else View.GONE
                 return view
             }
         }
         gridView.adapter = adapter
 
-        // 点击网格图标时的交互
         gridView.setOnItemClickListener { _, view, position, _ ->
             val pkg = unselectedApps[position].activityInfo.packageName
             val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
@@ -156,7 +147,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 弹窗装载网格
         AlertDialog.Builder(this)
             .setTitle("像点泡泡纸一样连点你想加的 App：")
             .setView(gridView)
@@ -222,11 +212,13 @@ class MainActivity : AppCompatActivity() {
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
+    // 💥 核心修复区：超级压缩机！
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
-        val bitmap = Bitmap.createBitmap(if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 100, if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 100, Bitmap.Config.ARGB_8888)
+        // 强制把图标压缩到 80x80 像素，体积缩小 10 倍！彻底告别内存溢出崩溃！
+        val safeSize = 80 
+        val bitmap = Bitmap.createBitmap(safeSize, safeSize, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.setBounds(0, 0, safeSize, safeSize)
         drawable.draw(canvas)
         return bitmap
     }
