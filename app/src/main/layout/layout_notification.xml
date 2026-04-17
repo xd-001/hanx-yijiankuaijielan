@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="10dp"
+    android:weightSum="10"
+    android:gravity="center">
+
+    <!-- 预留 10 个图标的位置，默认隐藏，代码里选了几个就显示几个 -->
+    <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon2" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon3" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon4" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon5" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon6" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon7" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon8" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+
+</LinearLayout>
