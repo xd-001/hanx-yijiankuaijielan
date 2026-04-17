@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
@@ -47,7 +48,7 @@ class MainActivity : AppCompatActivity() {
         val mainLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 40, 40, 80) }
 
         val btnStart = Button(this).apply {
-            text = "🚀 保存并刷新通知栏 (点我生效)"
+            text = "🚀 保存并刷新通知栏"
             textSize = 18f
             setPadding(0, 30, 0, 30)
             setBackgroundColor(Color.parseColor("#4CAF50"))
@@ -55,22 +56,21 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 val intent = Intent(this@MainActivity, QuickService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-                Toast.makeText(this@MainActivity, "已生效！下拉通知栏查看", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！", Toast.LENGTH_SHORT).show()
                 moveTaskToBack(true)
                 finish()
             }
         }
         mainLayout.addView(btnStart)
 
-        mainLayout.addView(TextView(this).apply { text = "👀 1:1 真实预览图 (通知栏实际大小)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "👀 1:1 真实预览图："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         previewContainer = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, 0) // 去除所有外边距，模拟真实通知栏
             setBackgroundColor(Color.parseColor("#F0F0F0")) 
         }
         mainLayout.addView(previewContainer)
 
-        mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)\n💡提示：如果只选1行图标，通知栏将永远不会被折叠！"; textSize = 14f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         val seekBar = SeekBar(this).apply {
             max = 6 
             progress = columnsPerRow - 4
@@ -87,11 +87,11 @@ class MainActivity : AppCompatActivity() {
         mainLayout.addView(seekBar)
 
         val btnAdd = Button(this).apply {
-            text = "➕ 添加应用到列表"
+            text = "➕ 打开网格极速多选"
             setPadding(0, 20, 0, 20)
-            setOnClickListener { showAddDialog() }
+            setOnClickListener { showGridAddDialog() }
         }
-        mainLayout.addView(TextView(this).apply { text = "📝 自由排序列队 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "📝 已选队列 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         mainLayout.addView(btnAdd)
 
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
@@ -102,14 +102,73 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
-    private fun showAddDialog() {
+    // 核心升级：精美的网格多选器！
+    private fun showGridAddDialog() {
         val pm = packageManager
+        
+        // 动态构建一个网格视图
+        val gridView = GridView(this).apply {
+            numColumns = 4 // 一行展示 4 个 App，找起来极快
+            verticalSpacing = 20
+            horizontalSpacing = 10
+            setPadding(20, 20, 20, 20)
+        }
+
+        // 把还没有选中的 App 过滤出来
         val unselectedApps = allApps.filter { !selectedApps.contains(it.activityInfo.packageName) }
-        val names = unselectedApps.map { it.loadLabel(pm).toString() }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("选择应用").setItems(names) { _, which ->
-            selectedApps.add(unselectedApps[which].activityInfo.packageName)
-            saveData(); refreshUI()
-        }.setNegativeButton("取消", null).show()
+        
+        // 临时记录本次弹出框里用户点击打钩了哪些
+        val tempSelectedPkgs = mutableSetOf<String>()
+
+        val adapter = object : BaseAdapter() {
+            override fun getCount() = unselectedApps.size
+            override fun getItem(pos: Int) = unselectedApps[pos]
+            override fun getItemId(pos: Int) = pos.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                val view = convertView ?: layoutInflater.inflate(R.layout.item_grid_app, parent, false)
+                val app = unselectedApps[position]
+                val pkg = app.activityInfo.packageName
+
+                val imgIcon = view.findViewById<ImageView>(R.id.img_icon)
+                val tvName = view.findViewById<TextView>(R.id.tv_name)
+                val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
+
+                imgIcon.setImageDrawable(app.loadIcon(pm))
+                tvName.text = app.loadLabel(pm)
+                
+                // 如果用户刚刚点击了它，显示绿色遮罩
+                mask.visibility = if (tempSelectedPkgs.contains(pkg)) View.VISIBLE else View.GONE
+                return view
+            }
+        }
+        gridView.adapter = adapter
+
+        // 点击网格图标时的交互
+        gridView.setOnItemClickListener { _, view, position, _ ->
+            val pkg = unselectedApps[position].activityInfo.packageName
+            val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
+            if (tempSelectedPkgs.contains(pkg)) {
+                tempSelectedPkgs.remove(pkg)
+                mask.visibility = View.GONE
+            } else {
+                tempSelectedPkgs.add(pkg)
+                mask.visibility = View.VISIBLE
+            }
+        }
+
+        // 弹窗装载网格
+        AlertDialog.Builder(this)
+            .setTitle("像点泡泡纸一样连点你想加的 App：")
+            .setView(gridView)
+            .setPositiveButton("确认添加") { _, _ ->
+                if (tempSelectedPkgs.isNotEmpty()) {
+                    selectedApps.addAll(tempSelectedPkgs)
+                    saveData()
+                    refreshUI()
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun dpToPx(dp: Float): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
@@ -119,22 +178,19 @@ class MainActivity : AppCompatActivity() {
         previewContainer.removeAllViews()
         var currentRow: LinearLayout? = null
         
-        // 按照真实 XML 精准生成预览图
         for (i in selectedApps.indices) {
             if (i % columnsPerRow == 0) {
                 currentRow = LinearLayout(this).apply { 
                     orientation = LinearLayout.HORIZONTAL
                     weightSum = columnsPerRow.toFloat()
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f)).apply {
-                        bottomMargin = dpToPx(2f)
-                    }
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f))
                 }
                 previewContainer.addView(currentRow)
             }
             val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
             val iconView = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+                setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
             }
@@ -177,7 +233,7 @@ class QuickService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("quick_id", "快捷启动", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
@@ -189,21 +245,27 @@ class QuickService : Service() {
 
         val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
         
-        for (i in 0..49) {
-            val resId = resources.getIdentifier("icon$i", "id", packageName)
-            if (resId != 0) remoteViews.setViewVisibility(resId, View.GONE)
+        for (r in 0..4) {
+            val rowId = resources.getIdentifier("row$r", "id", packageName)
+            if (rowId != 0) remoteViews.setViewVisibility(rowId, View.GONE)
         }
 
         for (i in selectedPkgs.indices) {
             if (i >= 50) break 
-            val slotIndex = (i / columns) * 10 + (i % columns)
+            val row = i / columns 
+            val col = i % columns 
+            val slotIndex = row * 10 + col 
+            
             val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
             if (launchIntent != null && slotIndex < 50) {
                 val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
                 try {
                     val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
                     val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
+                    val rowId = resources.getIdentifier("row$row", "id", packageName)
+                    
                     if (resId != 0) {
+                        remoteViews.setViewVisibility(rowId, View.VISIBLE)
                         remoteViews.setImageViewBitmap(resId, bitmap)
                         remoteViews.setViewVisibility(resId, View.VISIBLE)
                         remoteViews.setOnClickPendingIntent(resId, pi)
@@ -215,9 +277,9 @@ class QuickService : Service() {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_id") else Notification.Builder(this)
         
         builder.setSmallIcon(android.R.color.transparent)
-               .setContentTitle("")
-               .setContentText("")
-               .setShowWhen(false) // 核心代码：彻底隐藏“刚刚”时间戳！
+               .setContentTitle(" ")
+               .setContentText(" ")
+               .setShowWhen(false)
                .setOngoing(true)
                .setCustomContentView(remoteViews)
                .setCustomBigContentView(remoteViews)
