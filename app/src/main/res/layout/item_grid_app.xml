@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <!-- 彩色大图标 -->
+        <ImageView
+            android:id="@+id/img_icon"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:scaleType="fitCenter" />
+
+        <!-- 极小的名字（防止你认不出某些图标） -->
+        <TextView
+            android:id="@+id/tv_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:textSize="10f"
+            android:textColor="#666666"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- 选中时的绿色半透明遮罩与打钩图标 -->
+    <FrameLayout
+        android:id="@+id/mask_checked"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_centerHorizontal="true"
+        android:background="#664CAF50"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="✓"
+            android:textColor="#FFFFFF"
+            android:textSize="24f"
+            android:textStyle="bold" />
+    </FrameLayout>
+</RelativeLayout>
