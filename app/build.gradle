@@ -12,17 +12,15 @@ android {
         versionCode 1
         versionName "1.0"
         
-        // 💥 瘦身绝招 1：剔除全球 80 多种语言包，只保留中文！
+        // 瘦身绝招 1：保留这个绝对安全的语言精简
         resConfigs "zh"
     }
     
     buildTypes {
         debug {
-            // 💥 瘦身绝招 2：开启强力代码混淆与压缩引擎！
-            minifyEnabled true
-            // 💥 瘦身绝招 3：自动清理所有没有用到的废弃图片和资源！
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            // 💥 关闭这两个“六亲不认”的过度瘦身引擎
+            minifyEnabled false
+            shrinkResources false
         }
     }
     
