@@ -8,10 +8,24 @@ android {
     defaultConfig {
         applicationId "com.my.app"
         minSdk 26
-        targetSdk 30  // <--- 核心黑客手段：降级到30，强杀系统强制头部！
+        targetSdk 30
         versionCode 1
         versionName "1.0"
+        
+        // 💥 瘦身绝招 1：剔除全球 80 多种语言包，只保留中文！
+        resConfigs "zh"
     }
+    
+    buildTypes {
+        debug {
+            // 💥 瘦身绝招 2：开启强力代码混淆与压缩引擎！
+            minifyEnabled true
+            // 💥 瘦身绝招 3：自动清理所有没有用到的废弃图片和资源！
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
