@@ -13,6 +13,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -23,8 +24,6 @@ class MainActivity : AppCompatActivity() {
     private val selectedApps = mutableListOf<String>()
     private var columnsPerRow = 6
     private lateinit var allApps: List<ResolveInfo>
-    
-    // UI 控件
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
 
@@ -34,7 +33,6 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
 
-        // 加载数据
         val pm = packageManager
         allApps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER), 0)
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
@@ -45,11 +43,9 @@ class MainActivity : AppCompatActivity() {
             selectedApps.addAll(savedApps.split(","))
         }
 
-        // --- 开始构建超强控制台界面 ---
         val rootScroll = ScrollView(this)
         val mainLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 40, 40, 80) }
 
-        // 1. 顶部启动按钮
         val btnStart = Button(this).apply {
             text = "🚀 保存并刷新通知栏 (点我生效)"
             textSize = 18f
@@ -59,26 +55,24 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 val intent = Intent(this@MainActivity, QuickService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-                Toast.makeText(this@MainActivity, "已生效！下拉通知栏查看，App已隐藏", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！下拉通知栏查看", Toast.LENGTH_SHORT).show()
                 moveTaskToBack(true)
                 finish()
             }
         }
         mainLayout.addView(btnStart)
 
-        // 2. 实时预览区
-        mainLayout.addView(TextView(this).apply { text = "👀 实时预览图 (通知栏长这样)："; textSize = 16f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "👀 1:1 真实预览图 (通知栏实际大小)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         previewContainer = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 20, 20, 20)
-            setBackgroundColor(Color.parseColor("#E0E0E0")) // 灰色背景模拟通知栏
+            setPadding(0, 0, 0, 0) // 去除所有外边距，模拟真实通知栏
+            setBackgroundColor(Color.parseColor("#F0F0F0")) 
         }
         mainLayout.addView(previewContainer)
 
-        // 3. 列数调节滑块
-        mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 16f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)\n💡提示：如果只选1行图标，通知栏将永远不会被折叠！"; textSize = 14f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         val seekBar = SeekBar(this).apply {
-            max = 6 // 范围 0~6，代表 4~10
+            max = 6 
             progress = columnsPerRow - 4
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -92,106 +86,80 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(seekBar)
 
-        // 4. 添加应用按钮
         val btnAdd = Button(this).apply {
             text = "➕ 添加应用到列表"
             setPadding(0, 20, 0, 20)
             setOnClickListener { showAddDialog() }
         }
-        mainLayout.addView(TextView(this).apply { text = "📝 自由排序列队 (上移/下移/删除)："; textSize = 16f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        mainLayout.addView(TextView(this).apply { text = "📝 自由排序列队 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         mainLayout.addView(btnAdd)
 
-        // 5. 选中的应用列表 (可排序)
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
         mainLayout.addView(selectedListContainer)
 
         rootScroll.addView(mainLayout)
         setContentView(rootScroll)
-
-        // 初始化界面
         refreshUI()
     }
 
-    // 弹出选择器
     private fun showAddDialog() {
         val pm = packageManager
-        // 过滤掉已经选过的，只显示还没选的
         val unselectedApps = allApps.filter { !selectedApps.contains(it.activityInfo.packageName) }
         val names = unselectedApps.map { it.loadLabel(pm).toString() }.toTypedArray()
-
-        AlertDialog.Builder(this)
-            .setTitle("请选择要添加的应用")
-            .setItems(names) { _, which ->
-                selectedApps.add(unselectedApps[which].activityInfo.packageName)
-                saveData()
-                refreshUI()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+        AlertDialog.Builder(this).setTitle("选择应用").setItems(names) { _, which ->
+            selectedApps.add(unselectedApps[which].activityInfo.packageName)
+            saveData(); refreshUI()
+        }.setNegativeButton("取消", null).show()
     }
 
-    // 刷新预览图和排序列表
+    private fun dpToPx(dp: Float): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
+
     private fun refreshUI() {
         val pm = packageManager
-        
-        // --- 刷新预览区 ---
         previewContainer.removeAllViews()
         var currentRow: LinearLayout? = null
+        
+        // 按照真实 XML 精准生成预览图
         for (i in selectedApps.indices) {
             if (i % columnsPerRow == 0) {
-                currentRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; weightSum = columnsPerRow.toFloat(); setPadding(0, 0, 0, 15) }
+                currentRow = LinearLayout(this).apply { 
+                    orientation = LinearLayout.HORIZONTAL
+                    weightSum = columnsPerRow.toFloat()
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f)).apply {
+                        bottomMargin = dpToPx(2f)
+                    }
+                }
                 previewContainer.addView(currentRow)
             }
-            val pkg = selectedApps[i]
-            val app = allApps.find { it.activityInfo.packageName == pkg }
+            val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
             val iconView = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(0, 120, 1f)
-                setPadding(10, 10, 10, 10)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+                scaleType = ImageView.ScaleType.FIT_CENTER
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
             }
             currentRow?.addView(iconView)
         }
 
-        // --- 刷新排序列表 ---
         selectedListContainer.removeAllViews()
         for (i in selectedApps.indices) {
-            val pkg = selectedApps[i]
-            val app = allApps.find { it.activityInfo.packageName == pkg }
-            
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 15, 0, 15)
-            }
-            // 图标
+            val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 15, 0, 15) }
             row.addView(ImageView(this).apply { layoutParams = LinearLayout.LayoutParams(100, 100); app?.let { setImageDrawable(it.loadIcon(pm)) } })
-            // 名字
             row.addView(TextView(this).apply { text = app?.loadLabel(pm) ?: "未知"; textSize = 16f; setPadding(30, 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-            // 上移按钮
             row.addView(Button(this).apply { text = "↑"; layoutParams = LinearLayout.LayoutParams(120, -2); isEnabled = i > 0; setOnClickListener { swap(i, i - 1) } })
-            // 下移按钮
             row.addView(Button(this).apply { text = "↓"; layoutParams = LinearLayout.LayoutParams(120, -2); isEnabled = i < selectedApps.size - 1; setOnClickListener { swap(i, i + 1) } })
-            // 删除按钮
             row.addView(Button(this).apply { text = "X"; setTextColor(Color.RED); layoutParams = LinearLayout.LayoutParams(120, -2); setOnClickListener { selectedApps.removeAt(i); saveData(); refreshUI() } })
-
             selectedListContainer.addView(row)
         }
     }
 
     private fun swap(i: Int, j: Int) {
-        val temp = selectedApps[i]
-        selectedApps[i] = selectedApps[j]
-        selectedApps[j] = temp
-        saveData()
-        refreshUI()
+        val temp = selectedApps[i]; selectedApps[i] = selectedApps[j]; selectedApps[j] = temp; saveData(); refreshUI()
     }
 
     private fun saveData() {
-        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putInt("columns", columnsPerRow)
-            .putString("selected_apps", selectedApps.joinToString(","))
-            .apply()
+        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit().putInt("columns", columnsPerRow).putString("selected_apps", selectedApps.joinToString(",")).apply()
     }
 }
 
@@ -215,37 +183,26 @@ class QuickService : Service() {
 
         val pm = packageManager
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        
         val columns = prefs.getInt("columns", 6)
         val savedApps = prefs.getString("selected_apps", "") ?: ""
         val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
 
         val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
         
-        // 先把 50 个槽位全部隐藏
         for (i in 0..49) {
             val resId = resources.getIdentifier("icon$i", "id", packageName)
             if (resId != 0) remoteViews.setViewVisibility(resId, View.GONE)
         }
 
-        // 精准计算排版：把 App 塞进对应的槽位里
         for (i in selectedPkgs.indices) {
-            if (i >= 50) break // 最多支持 50 个
-            
-            val pkg = selectedPkgs[i]
-            val row = i / columns  // 第几排
-            val col = i % columns  // 第几列
-            val slotIndex = row * 10 + col // 映射到 XML 里的 icon0 ~ icon49
-            
-            val launchIntent = pm.getLaunchIntentForPackage(pkg)
+            if (i >= 50) break 
+            val slotIndex = (i / columns) * 10 + (i % columns)
+            val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
             if (launchIntent != null && slotIndex < 50) {
                 val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
-                
                 try {
-                    val appInfo = pm.getApplicationInfo(pkg, 0)
-                    val bitmap = drawableToBitmap(appInfo.loadIcon(pm))
+                    val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
                     val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
-                    
                     if (resId != 0) {
                         remoteViews.setImageViewBitmap(resId, bitmap)
                         remoteViews.setViewVisibility(resId, View.VISIBLE)
@@ -259,6 +216,8 @@ class QuickService : Service() {
         
         builder.setSmallIcon(android.R.color.transparent)
                .setContentTitle("")
+               .setContentText("")
+               .setShowWhen(false) // 核心代码：彻底隐藏“刚刚”时间戳！
                .setOngoing(true)
                .setCustomContentView(remoteViews)
                .setCustomBigContentView(remoteViews)
