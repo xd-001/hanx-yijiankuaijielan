@@ -8,7 +8,7 @@ android {
     defaultConfig {
         applicationId "com.my.app"
         minSdk 26
-        targetSdk 33
+        targetSdk 30  // <--- 核心黑客手段：降级到30，强杀系统强制头部！
         versionCode 1
         versionName "1.0"
     }
