@@ -2,20 +2,48 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:padding="10dp"
-    android:weightSum="10"
-    android:gravity="center">
+    android:orientation="vertical"
+    android:padding="10dp">
 
-    <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon2" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon3" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon4" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon5" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon6" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon7" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon8" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
-    <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:visibility="gone" android:scaleType="fitCenter" />
+    <!-- 第一排 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:weightSum="10" android:layout_marginBottom="5dp">
+        <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon2" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon3" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon4" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon5" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon6" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon7" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon8" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+    </LinearLayout>
 
+    <!-- 第二排 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:weightSum="10" android:layout_marginBottom="5dp">
+        <ImageView android:id="@+id/icon10" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon11" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon12" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon13" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon14" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon15" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon16" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon17" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon18" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon19" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 第三排 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:weightSum="10">
+        <ImageView android:id="@+id/icon20" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon21" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon22" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon23" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon24" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon25" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon26" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon27" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon28" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+        <ImageView android:id="@+id/icon29" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:padding="6dp" android:visibility="gone" />
+    </LinearLayout>
 </LinearLayout>
