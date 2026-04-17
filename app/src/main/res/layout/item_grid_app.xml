@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:gravity="center"
-            android:textSize="10f"
+            android:textSize="10sp"
             android:textColor="#666666"
             android:singleLine="true"
             android:ellipsize="end" />
@@ -44,7 +44,7 @@
             android:layout_gravity="center"
             android:text="✓"
             android:textColor="#FFFFFF"
-            android:textSize="24f"
+            android:textSize="24sp"
             android:textStyle="bold" />
     </FrameLayout>
 </RelativeLayout>
