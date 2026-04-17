@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btn = Button(this).apply {
-            text = "✨ 启动/刷新 绝美通知栏 ✨"
+            text = "✨ 启动/刷新 并隐藏界面 ✨"
             textSize = 18f
             setPadding(0, 20, 0, 20)
             setOnClickListener {
@@ -39,13 +39,17 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     startService(intent)
                 }
-                Toast.makeText(this@MainActivity, "已生效！快下拉通知栏看看吧", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！App已隐藏至后台", Toast.LENGTH_SHORT).show()
+                
+                // 关键两行代码：点击后瞬间退到后台并关闭界面
+                moveTaskToBack(true)
+                finish()
             }
         }
         layout.addView(btn)
 
         val text = TextView(this).apply { 
-            text = "请勾选你要放在通知栏的应用\n（为了排版美观，最多建议勾选 10 个）："
+            text = "请勾选你要放在通知栏的应用\n（选完后点击上方按钮即可）："
             textSize = 15f
             setPadding(0, 30, 0, 20) 
         }
@@ -82,7 +86,6 @@ class MainActivity : AppCompatActivity() {
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
-    // 将系统图标转换为可显示的图片格式
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
         if (drawable is BitmapDrawable && drawable.bitmap != null) {
             return drawable.bitmap
@@ -108,10 +111,7 @@ class QuickService : Service() {
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         val allApps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER), 0)
         
-        // 使用我们刚建的精美布局文件
         val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
-        
-        // 绑定 XML 里的 10 个图片位置
         val iconIds = arrayOf(R.id.icon0, R.id.icon1, R.id.icon2, R.id.icon3, R.id.icon4, R.id.icon5, R.id.icon6, R.id.icon7, R.id.icon8, R.id.icon9)
         var count = 0
 
@@ -124,7 +124,6 @@ class QuickService : Service() {
                     val iconDrawable = app.loadIcon(pm)
                     val bitmap = drawableToBitmap(iconDrawable)
                     
-                    // 把提取出来的彩色图标塞进对应的位置
                     remoteViews.setImageViewBitmap(iconIds[count], bitmap)
                     remoteViews.setViewVisibility(iconIds[count], View.VISIBLE)
                     remoteViews.setOnClickPendingIntent(iconIds[count], pi)
@@ -141,7 +140,7 @@ class QuickService : Service() {
         
         builder.setSmallIcon(android.R.drawable.star_on)
                .setOngoing(true)
-               .setCustomContentView(remoteViews) // 关键：替换系统默认样式！
+               .setCustomContentView(remoteViews)
 
         startForeground(1, builder.build())
         return START_STICKY
