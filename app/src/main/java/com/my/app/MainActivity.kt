@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 val intent = Intent(this@MainActivity, QuickService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-                Toast.makeText(this@MainActivity, "已生效！", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！(系统后台生成中，0延迟)", Toast.LENGTH_SHORT).show()
                 moveTaskToBack(true)
                 finish()
             }
@@ -222,72 +222,77 @@ class QuickService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val manager = getSystemService(NotificationManager::class.java)
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // 💥 黑客指令：IMPORTANCE_MAX，系统最高优先级，迫使部分手机自动展开大视图！
-            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_MAX)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            // 💥 改回 DEFAULT 优先级，防止被手机强行限流/拦截
+            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_DEFAULT)
+            channel.setShowBadge(false)
+            manager.createNotificationChannel(channel)
         }
 
-        val pm = packageManager
-        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        val columns = prefs.getInt("columns", 6)
-        val savedApps = prefs.getString("selected_apps", "") ?: ""
-        val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
-
-        // 恢复双视图逻辑：折叠(1行)，展开(全部)
-        val collapsedViews = RemoteViews(packageName, R.layout.layout_notification)
-        val expandedViews = RemoteViews(packageName, R.layout.layout_notification)
-        
-        for (r in 0..4) {
-            val rowId = resources.getIdentifier("row$r", "id", packageName)
-            if (rowId != 0) {
-                collapsedViews.setViewVisibility(rowId, View.GONE)
-                expandedViews.setViewVisibility(rowId, View.GONE)
-            }
-        }
-
-        for (i in selectedPkgs.indices) {
-            if (i >= 50) break 
-            val row = i / columns 
-            val col = i % columns 
-            val slotIndex = row * 10 + col 
-            
-            val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
-            if (launchIntent != null && slotIndex < 50) {
-                val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
-                try {
-                    val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
-                    val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
-                    val rowId = resources.getIdentifier("row$row", "id", packageName)
-                    
-                    if (resId != 0) {
-                        expandedViews.setViewVisibility(rowId, View.VISIBLE)
-                        expandedViews.setImageViewBitmap(resId, bitmap)
-                        expandedViews.setViewVisibility(resId, View.VISIBLE)
-                        expandedViews.setOnClickPendingIntent(resId, pi)
-
-                        if (row == 0) {
-                            collapsedViews.setViewVisibility(rowId, View.VISIBLE)
-                            collapsedViews.setImageViewBitmap(resId, bitmap)
-                            collapsedViews.setViewVisibility(resId, View.VISIBLE)
-                            collapsedViews.setOnClickPendingIntent(resId, pi)
-                        }
-                    }
-                } catch (e: Exception) {}
-            }
-        }
-
+        // 💥 终极防杀机制：第一秒立刻抛出空通知抢占前台，防止因为读取图标耗时被系统强杀！
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_id") else Notification.Builder(this)
-        
-        builder.setSmallIcon(android.R.color.transparent)
-               .setContentTitle(" ")
-               .setContentText(" ")
-               .setShowWhen(false)
-               .setOngoing(true)
-               .setCustomContentView(collapsedViews) 
-               .setCustomBigContentView(expandedViews)
-
+        builder.setSmallIcon(android.R.color.transparent).setContentTitle(" ").setContentText(" ").setShowWhen(false).setOngoing(true)
         startForeground(1, builder.build())
+
+        // 💥 异步多线程提速：把苦力活扔到后台，彻底解决延迟和卡顿！
+        Thread {
+            val pm = packageManager
+            val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+            val columns = prefs.getInt("columns", 6)
+            val savedApps = prefs.getString("selected_apps", "") ?: ""
+            val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
+
+            val collapsedViews = RemoteViews(packageName, R.layout.layout_notification)
+            val expandedViews = RemoteViews(packageName, R.layout.layout_notification)
+            
+            for (r in 0..4) {
+                val rowId = resources.getIdentifier("row$r", "id", packageName)
+                if (rowId != 0) {
+                    collapsedViews.setViewVisibility(rowId, View.GONE)
+                    expandedViews.setViewVisibility(rowId, View.GONE)
+                }
+            }
+
+            for (i in selectedPkgs.indices) {
+                if (i >= 50) break 
+                val row = i / columns 
+                val col = i % columns 
+                val slotIndex = row * 10 + col 
+                
+                val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
+                if (launchIntent != null && slotIndex < 50) {
+                    val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
+                    try {
+                        val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
+                        val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
+                        val rowId = resources.getIdentifier("row$row", "id", packageName)
+                        
+                        if (resId != 0) {
+                            expandedViews.setViewVisibility(rowId, View.VISIBLE)
+                            expandedViews.setImageViewBitmap(resId, bitmap)
+                            expandedViews.setViewVisibility(resId, View.VISIBLE)
+                            expandedViews.setOnClickPendingIntent(resId, pi)
+
+                            if (row == 0) {
+                                collapsedViews.setViewVisibility(rowId, View.VISIBLE)
+                                collapsedViews.setImageViewBitmap(resId, bitmap)
+                                collapsedViews.setViewVisibility(resId, View.VISIBLE)
+                                collapsedViews.setOnClickPendingIntent(resId, pi)
+                            }
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+
+            builder.setCustomContentView(collapsedViews) 
+                   .setCustomBigContentView(expandedViews)
+            
+            // 图标加载完毕，秒速更新通知栏！
+            manager.notify(1, builder.build())
+        }.start()
+
         return START_STICKY
     }
 }
