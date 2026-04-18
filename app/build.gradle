@@ -9,16 +9,16 @@ android {
         applicationId "com.my.app"
         minSdk 26
         targetSdk 30
-        versionCode 1
-        versionName "1.0"
         
-        // 瘦身绝招 1：保留这个绝对安全的语言精简
+        // 💥 修改这里！versionCode 是给机器看的底层版本（每次更新必须+1），versionName 是给人看的版本号
+        versionCode 2
+        versionName "1.0.1"
+        
         resConfigs "zh"
     }
     
     buildTypes {
         debug {
-            // 💥 关闭这两个“六亲不认”的过度瘦身引擎
             minifyEnabled false
             shrinkResources false
         }
