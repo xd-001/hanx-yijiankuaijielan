@@ -173,7 +173,8 @@ class MainActivity : AppCompatActivity() {
                 currentRow = LinearLayout(this).apply { 
                     orientation = LinearLayout.HORIZONTAL
                     weightSum = columnsPerRow.toFloat()
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f))
+                    // 配合 35dp 修改预览图高度
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(35f))
                 }
                 previewContainer.addView(currentRow)
             }
@@ -225,18 +226,15 @@ class QuickService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // 💥 改回 DEFAULT 优先级，防止被手机强行限流/拦截
             val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_DEFAULT)
             channel.setShowBadge(false)
             manager.createNotificationChannel(channel)
         }
 
-        // 💥 终极防杀机制：第一秒立刻抛出空通知抢占前台，防止因为读取图标耗时被系统强杀！
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_id") else Notification.Builder(this)
         builder.setSmallIcon(android.R.color.transparent).setContentTitle(" ").setContentText(" ").setShowWhen(false).setOngoing(true)
         startForeground(1, builder.build())
 
-        // 💥 异步多线程提速：把苦力活扔到后台，彻底解决延迟和卡顿！
         Thread {
             val pm = packageManager
             val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
@@ -244,25 +242,24 @@ class QuickService : Service() {
             val savedApps = prefs.getString("selected_apps", "") ?: ""
             val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
 
-            val collapsedViews = RemoteViews(packageName, R.layout.layout_notification)
-            val expandedViews = RemoteViews(packageName, R.layout.layout_notification)
+            // 💥 移除折叠视图概念，所有图标硬塞进主视图
+            val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
             
-            for (r in 0..4) {
+            for (r in 0..1) {
                 val rowId = resources.getIdentifier("row$r", "id", packageName)
                 if (rowId != 0) {
-                    collapsedViews.setViewVisibility(rowId, View.GONE)
-                    expandedViews.setViewVisibility(rowId, View.GONE)
+                    remoteViews.setViewVisibility(rowId, View.GONE)
                 }
             }
 
             for (i in selectedPkgs.indices) {
-                if (i >= 50) break 
+                if (i >= 20) break // 最多 2 行，每行最多 10 个，总共 20 个
                 val row = i / columns 
                 val col = i % columns 
                 val slotIndex = row * 10 + col 
                 
                 val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
-                if (launchIntent != null && slotIndex < 50) {
+                if (launchIntent != null && slotIndex < 20) {
                     val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
                     try {
                         val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
@@ -270,26 +267,18 @@ class QuickService : Service() {
                         val rowId = resources.getIdentifier("row$row", "id", packageName)
                         
                         if (resId != 0) {
-                            expandedViews.setViewVisibility(rowId, View.VISIBLE)
-                            expandedViews.setImageViewBitmap(resId, bitmap)
-                            expandedViews.setViewVisibility(resId, View.VISIBLE)
-                            expandedViews.setOnClickPendingIntent(resId, pi)
-
-                            if (row == 0) {
-                                collapsedViews.setViewVisibility(rowId, View.VISIBLE)
-                                collapsedViews.setImageViewBitmap(resId, bitmap)
-                                collapsedViews.setViewVisibility(resId, View.VISIBLE)
-                                collapsedViews.setOnClickPendingIntent(resId, pi)
-                            }
+                            remoteViews.setViewVisibility(rowId, View.VISIBLE)
+                            remoteViews.setImageViewBitmap(resId, bitmap)
+                            remoteViews.setViewVisibility(resId, View.VISIBLE)
+                            remoteViews.setOnClickPendingIntent(resId, pi)
                         }
                     } catch (e: Exception) {}
                 }
             }
 
-            builder.setCustomContentView(collapsedViews) 
-                   .setCustomBigContentView(expandedViews)
+            builder.setCustomContentView(remoteViews) 
+                   .setCustomBigContentView(remoteViews) // 无论是否展开，都显示 2 行 35dp
             
-            // 图标加载完毕，秒速更新通知栏！
             manager.notify(1, builder.build())
         }.start()
 
