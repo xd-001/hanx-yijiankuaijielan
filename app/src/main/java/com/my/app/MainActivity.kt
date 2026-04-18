@@ -223,7 +223,8 @@ class QuickService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_LOW)
+            // 💥 黑客指令：IMPORTANCE_MAX，系统最高优先级，迫使部分手机自动展开大视图！
+            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_MAX)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
@@ -233,13 +234,15 @@ class QuickService : Service() {
         val savedApps = prefs.getString("selected_apps", "") ?: ""
         val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
 
-        // 💥 修复：直接用一个大盘子装所有图标！
-        val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
+        // 恢复双视图逻辑：折叠(1行)，展开(全部)
+        val collapsedViews = RemoteViews(packageName, R.layout.layout_notification)
+        val expandedViews = RemoteViews(packageName, R.layout.layout_notification)
         
         for (r in 0..4) {
             val rowId = resources.getIdentifier("row$r", "id", packageName)
             if (rowId != 0) {
-                remoteViews.setViewVisibility(rowId, View.GONE)
+                collapsedViews.setViewVisibility(rowId, View.GONE)
+                expandedViews.setViewVisibility(rowId, View.GONE)
             }
         }
 
@@ -258,11 +261,17 @@ class QuickService : Service() {
                     val rowId = resources.getIdentifier("row$row", "id", packageName)
                     
                     if (resId != 0) {
-                        // 没有任何 if (row == 0) 的拦截，全部直接放入盘子！
-                        remoteViews.setViewVisibility(rowId, View.VISIBLE)
-                        remoteViews.setImageViewBitmap(resId, bitmap)
-                        remoteViews.setViewVisibility(resId, View.VISIBLE)
-                        remoteViews.setOnClickPendingIntent(resId, pi)
+                        expandedViews.setViewVisibility(rowId, View.VISIBLE)
+                        expandedViews.setImageViewBitmap(resId, bitmap)
+                        expandedViews.setViewVisibility(resId, View.VISIBLE)
+                        expandedViews.setOnClickPendingIntent(resId, pi)
+
+                        if (row == 0) {
+                            collapsedViews.setViewVisibility(rowId, View.VISIBLE)
+                            collapsedViews.setImageViewBitmap(resId, bitmap)
+                            collapsedViews.setViewVisibility(resId, View.VISIBLE)
+                            collapsedViews.setOnClickPendingIntent(resId, pi)
+                        }
                     }
                 } catch (e: Exception) {}
             }
@@ -275,9 +284,8 @@ class QuickService : Service() {
                .setContentText(" ")
                .setShowWhen(false)
                .setOngoing(true)
-               // 💥 核心：不再分折叠和展开，让默认视图直接显示所有！
-               .setCustomContentView(remoteViews) 
-               .setCustomBigContentView(remoteViews)
+               .setCustomContentView(collapsedViews) 
+               .setCustomBigContentView(expandedViews)
 
         startForeground(1, builder.build())
         return START_STICKY
