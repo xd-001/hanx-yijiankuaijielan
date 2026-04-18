@@ -4,18 +4,21 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     
-    <!-- 重点看下面这一行！多了一个 android:icon 的配置 -->
+    <!-- 💥 修改这里：application 的 label 是桌面上显示的名字 -->
     <application 
-        android:label=" " 
+        android:label="快捷通知" 
         android:icon="@drawable/app_icon"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         
-        <activity android:name=".MainActivity" android:label=" " android:exported="true" android:excludeFromRecents="true">
+        <!-- activity 是打开的主界面名字 -->
+        <activity android:name=".MainActivity" android:label="快捷通知" android:exported="true" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- 💥 保持这个为纯空格！它是管通知栏显示的，必须空着 -->
         <service android:name=".QuickService" android:label=" " android:exported="false" />
     </application>
 </manifest>
