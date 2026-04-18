@@ -1,30 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 外层留一点极小的缝隙，防止贴边 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="0dp">
-    <!-- 第 0 行 -->
-    <LinearLayout android:id="@+id/row0" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:visibility="gone">
-        <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon2" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon3" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon4" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon5" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon6" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon7" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon8" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+    android:layout_width="match_parent" 
+    android:layout_height="wrap_content" 
+    android:orientation="vertical" 
+    android:padding="2dp">
+    
+    <!-- 第 0 行：高度提升至黄金尺寸 42dp，底部加 4dp 间距防止和下一行打架 -->
+    <LinearLayout android:id="@+id/row0" android:layout_width="match_parent" android:layout_height="42dp" android:layout_marginBottom="4dp" android:orientation="horizontal" android:visibility="gone">
+        <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon7" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon8" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
     </LinearLayout>
-    <!-- 第 1 行 -->
-    <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:visibility="gone">
-        <ImageView android:id="@+id/icon10" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon11" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon12" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon13" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon14" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon15" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon16" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon17" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon18" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
-        <ImageView android:id="@+id/icon19" android:layout_width="0dp" android:layout_height="35dp" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+
+    <!-- 第 1 行：高度提升至黄金尺寸 42dp -->
+    <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="42dp" android:orientation="horizontal" android:visibility="gone">
+        <ImageView android:id="@+id/icon10" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon11" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon12" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon13" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon14" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon15" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon16" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon17" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon18" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <ImageView android:id="@+id/icon19" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="3dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>
