@@ -18,12 +18,19 @@ jobs:
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-version: '8.4'
+
+    # 💥 核心：在打包前，通过命令行瞬间生成一个属于你的、独一无二的固定签名库！
+    - name: Generate Keystore
+      run: |
+        keytool -genkey -v -keystore app/keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key0 -dname "CN=MyApp, OU=MyOrg, O=MyCompany, L=MyCity, ST=MyState, C=US" -storepass 123456 -keypass 123456
         
+    # 💥 核心：改为打“正式版（Release）”的包
     - name: Build with Gradle
-      run: gradle assembleDebug
+      run: gradle assembleRelease
       
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: QuickLauncher-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: QuickLauncher-V1.0.2-Release
+        # 💥 路径改为 release 文件夹
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
