@@ -6,17 +6,25 @@ android {
     namespace 'com.my.app'
     compileSdk 34 
 
+    // 💥 新增：永久固定签名配置！只要这个在，永远可以覆盖安装！
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword "123456"
+            keyAlias "mykey"
+            keyPassword "123456"
+        }
+    }
+
     defaultConfig {
         applicationId "com.my.app"
         minSdk 26
-        // 💥 核心修复：降级回 30！强行绕过安卓 12+ 的“强制通知栏头部”政策
         targetSdk 30 
-        versionCode 4 
-        versionName "1.0.3" // 升到 1.0.3，直接覆盖安装
+        versionCode 5 
+        versionName "1.0.4"
         resConfigs "zh"
     }
 
-    // 这个“金钟罩”必须留着，它能防止 GitHub 因为我们降级到 30 而报错中断
     lint {
         checkReleaseBuilds false
         abortOnError false
@@ -30,7 +38,7 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            signingConfig signingConfigs.debug 
+            signingConfig signingConfigs.release // 绑定上面的专属签名
         }
     }
     
