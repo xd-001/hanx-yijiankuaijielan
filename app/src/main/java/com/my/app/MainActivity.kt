@@ -29,7 +29,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
 
-    private val iconNames = arrayOf("🫥 真正透明隐形 (黑科技推荐)", "⚙️ 系统圆环 (最强伪装)", "🔸 菱形小点", "❗ 提示感叹号", "🤖 默认应用图标")
+    // 💥 终极修复：全部换成系统底层自带的“白名单”合法图标，绝对不会被拦截替换！
+    private val iconNames = arrayOf(
+        "🔄 数据同步 (最自然，强烈推荐)", 
+        "⚙️ 系统设置齿轮", 
+        "⬇️ 下载完成箭头", 
+        "❕ 提示感叹号", 
+        "🤖 默认应用图标"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +90,7 @@ class MainActivity : AppCompatActivity() {
             layoutParams = params
             setOnClickListener {
                 stopService(Intent(this@MainActivity, QuickService::class.java))
-                getSystemService(NotificationManager::class.java).cancel(1)
+                getSystemService(NotificationManager::class.java).cancel(3) // 清除 v3 缓存
                 Toast.makeText(this@MainActivity, "已彻底关闭并清理！", Toast.LENGTH_SHORT).show()
             }
         }
@@ -379,8 +386,17 @@ class QuickService : Service() {
         } else {
             stopForeground(true)
         }
-        getSystemService(NotificationManager::class.java).cancel(1)
+        getSystemService(NotificationManager::class.java).cancel(3)
     }
+
+    // 💥 终极修复：只使用系统底层的绝对白名单合法图标！
+    private val iconTypes = intArrayOf(
+        android.R.drawable.stat_notify_sync,       // 0: 同步 (看起来最像系统底层在跑数据)
+        android.R.drawable.ic_menu_preferences,    // 1: 齿轮
+        android.R.drawable.stat_sys_download_done, // 2: 下载箭头
+        android.R.drawable.ic_dialog_info,         // 3: 提示符
+        android.R.drawable.sym_def_app_icon        // 4: 默认图标
+    )
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
         val safeSize = 80 
@@ -396,58 +412,27 @@ class QuickService : Service() {
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         val currentIconType = prefs.getInt("icon_type", 0) 
         
+        // 💥 换频道：强行把缓存干碎！系统会认为这是一个新应用发出的新通知！
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("quick_top_v2", "置顶快捷通知", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel("quick_top_v3", "置顶快捷通知 v3", NotificationManager.IMPORTANCE_HIGH)
             channel.setShowBadge(false)
             channel.setSound(null, null) 
             channel.enableVibration(false)
             manager.createNotificationChannel(channel)
         }
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v3") else Notification.Builder(this)
         
-        // 💥 终极防拦截：现场纯代码手绘图标，完美骗过国产系统的审查！
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentIconType != 4) {
-            // 创建一张被系统认可的透明底画板
-            val bmp = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bmp)
-            val paint = android.graphics.Paint().apply {
-                isAntiAlias = true
-                color = Color.WHITE 
-                style = android.graphics.Paint.Style.FILL
-            }
-
-            when (currentIconType) {
-                0 -> { /* 透明隐形：什么都不画，交一张完全空白合法的白卷！*/ }
-                1 -> { // 圆环伪装
-                    canvas.drawCircle(50f, 50f, 35f, paint)
-                    paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                    canvas.drawCircle(50f, 50f, 15f, paint) 
-                }
-                2 -> { // 菱形伪装
-                    canvas.save()
-                    canvas.rotate(45f, 50f, 50f)
-                    canvas.drawRect(30f, 30f, 70f, 70f, paint)
-                    canvas.restore()
-                }
-                3 -> { // 提示符感叹号
-                    canvas.drawRect(42f, 15f, 58f, 65f, paint)
-                    canvas.drawRect(42f, 75f, 58f, 90f, paint)
-                }
-            }
-            builder.setSmallIcon(android.graphics.drawable.Icon.createWithBitmap(bmp))
-        } else {
-            builder.setSmallIcon(android.R.drawable.sym_def_app_icon) // 选了默认图标
-        }
-
-        builder.setContentTitle(" ")
+        // 💥 直接套用底层自带资源ID，系统绝对不敢拦截！
+        builder.setSmallIcon(iconTypes[currentIconType])
+               .setContentTitle(" ")
                .setContentText(" ")
                .setShowWhen(false)
                .setOngoing(true)
                .setCategory(Notification.CATEGORY_SERVICE) 
                .setSortKey("0000") 
 
-        startForeground(1, builder.build())
+        startForeground(3, builder.build()) // 💥 ID 改成 3，彻底粉碎旧缓存
 
         Thread {
             val pm = packageManager
@@ -492,7 +477,7 @@ class QuickService : Service() {
             builder.setCustomContentView(remoteViews) 
                    .setCustomBigContentView(remoteViews) 
             
-            manager.notify(1, builder.build())
+            manager.notify(3, builder.build())
         }.start()
 
         return START_STICKY
