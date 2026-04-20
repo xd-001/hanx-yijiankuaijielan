@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 外层取消多余的 padding，把每一寸空间都榨干 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" 
     android:layout_height="wrap_content" 
     android:orientation="vertical">
     
-    <!-- 第 0 行：高度调整为 32dp，完美适配安卓底层限制 -->
+    <!-- 第 0 行：高度 32dp -->
     <LinearLayout android:id="@+id/row0" android:layout_width="match_parent" android:layout_height="32dp" android:orientation="horizontal" android:visibility="gone">
         <ImageView android:id="@+id/icon0" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
         <ImageView android:id="@+id/icon1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
@@ -19,7 +18,7 @@
         <ImageView android:id="@+id/icon9" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
     </LinearLayout>
 
-    <!-- 第 1 行：高度同样为 32dp -->
+    <!-- 第 1 行：高度 32dp -->
     <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="32dp" android:orientation="horizontal" android:visibility="gone">
         <ImageView android:id="@+id/icon10" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
         <ImageView android:id="@+id/icon11" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
