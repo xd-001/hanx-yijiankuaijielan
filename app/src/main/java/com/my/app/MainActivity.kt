@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private val selectedApps = mutableListOf<String>()
+    private val hiddenApps = mutableSetOf<String>() // 💥 新增：黑名单集合
     private var columnsPerRow = 6
     private var currentIconType = 0 
     private lateinit var allApps: List<ResolveInfo>
@@ -52,6 +53,12 @@ class MainActivity : AppCompatActivity() {
         val savedApps = prefs.getString("selected_apps", "") ?: ""
         if (savedApps.isNotEmpty()) {
             selectedApps.addAll(savedApps.split(","))
+        }
+        
+        // 读取隐藏黑名单
+        val savedHidden = prefs.getString("hidden_apps", "") ?: ""
+        if (savedHidden.isNotEmpty()) {
+            hiddenApps.addAll(savedHidden.split(","))
         }
 
         val rootScroll = ScrollView(this)
@@ -127,13 +134,26 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(seekBar)
 
+        // 💥 新增：黑名单管理按钮
+        val btnHideApps = Button(this).apply {
+            text = "🚫 把不想看到的 App 关进黑名单"
+            setTextColor(Color.parseColor("#666666"))
+            setBackgroundColor(Color.parseColor("#E0E0E0"))
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            params.setMargins(0, 20, 0, 20)
+            layoutParams = params
+            setOnClickListener { showHideAppsDialog() }
+        }
+        mainLayout.addView(btnHideApps)
+
         val btnAdd = Button(this).apply {
             text = "➕ 打开网格极速多选"
             setPadding(0, 20, 0, 20)
             setOnClickListener { showGridAddDialog() }
         }
-        mainLayout.addView(TextView(this).apply { text = "📝 已选队列 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         mainLayout.addView(btnAdd)
+        
+        mainLayout.addView(TextView(this).apply { text = "📝 已选队列 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
 
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
         mainLayout.addView(selectedListContainer)
@@ -143,10 +163,11 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
+    // 💥 选 App 的网格：自动过滤掉黑名单中的软件
     private fun showGridAddDialog() {
         val pm = packageManager
-        
-        val displayApps = allApps
+        // 过滤掉在黑名单里的 App
+        val displayApps = allApps.filter { !hiddenApps.contains(it.activityInfo.packageName) }
         val tempSelectedPkgs = mutableSetOf<String>().apply { addAll(selectedApps) }
 
         val tvCounter = TextView(this).apply {
@@ -181,7 +202,12 @@ class MainActivity : AppCompatActivity() {
                 imgIcon.setImageDrawable(app.loadIcon(pm))
                 tvName.text = app.loadLabel(pm)
                 
-                mask.visibility = if (tempSelectedPkgs.contains(pkg)) View.VISIBLE else View.GONE
+                if (tempSelectedPkgs.contains(pkg)) {
+                    mask.visibility = View.VISIBLE
+                    mask.setBackgroundColor(Color.parseColor("#884CAF50")) // 半透明绿色遮罩
+                } else {
+                    mask.visibility = View.GONE
+                }
                 return view
             }
         }
@@ -196,6 +222,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 tempSelectedPkgs.add(pkg)
                 mask.visibility = View.VISIBLE
+                mask.setBackgroundColor(Color.parseColor("#884CAF50"))
             }
             tvCounter.text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
         }
@@ -218,6 +245,89 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // 💥 新增：黑名单专属网格界面
+    private fun showHideAppsDialog() {
+        val pm = packageManager
+        val displayApps = allApps
+        val tempHiddenPkgs = mutableSetOf<String>().apply { addAll(hiddenApps) }
+
+        val tvCounter = TextView(this).apply {
+            text = "🚫 点击加入黑名单：已屏蔽 ${tempHiddenPkgs.size} 个"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(0, 30, 0, 20)
+            setTextColor(Color.parseColor("#F44336")) // 红色字体
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        val gridView = GridView(this).apply {
+            numColumns = 4 
+            verticalSpacing = 20
+            horizontalSpacing = 10
+            setPadding(20, 0, 20, 20)
+        }
+
+        val adapter = object : BaseAdapter() {
+            override fun getCount() = displayApps.size
+            override fun getItem(pos: Int) = displayApps[pos]
+            override fun getItemId(pos: Int) = pos.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                val view = convertView ?: layoutInflater.inflate(R.layout.item_grid_app, parent, false)
+                val app = displayApps[position]
+                val pkg = app.activityInfo.packageName
+
+                val imgIcon = view.findViewById<ImageView>(R.id.img_icon)
+                val tvName = view.findViewById<TextView>(R.id.tv_name)
+                val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
+
+                imgIcon.setImageDrawable(app.loadIcon(pm))
+                tvName.text = app.loadLabel(pm)
+                
+                if (tempHiddenPkgs.contains(pkg)) {
+                    mask.visibility = View.VISIBLE
+                    mask.setBackgroundColor(Color.parseColor("#88FF0000")) // 半透明红色遮罩代表黑名单
+                } else {
+                    mask.visibility = View.GONE
+                }
+                return view
+            }
+        }
+        gridView.adapter = adapter
+
+        gridView.setOnItemClickListener { _, view, position, _ ->
+            val pkg = displayApps[position].activityInfo.packageName
+            val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
+            if (tempHiddenPkgs.contains(pkg)) {
+                tempHiddenPkgs.remove(pkg)
+                mask.visibility = View.GONE
+            } else {
+                tempHiddenPkgs.add(pkg)
+                mask.visibility = View.VISIBLE
+                mask.setBackgroundColor(Color.parseColor("#88FF0000"))
+            }
+            tvCounter.text = "🚫 点击加入黑名单：已屏蔽 ${tempHiddenPkgs.size} 个"
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(tvCounter)
+            addView(gridView)
+        }
+
+        AlertDialog.Builder(this)
+            .setView(layout)
+            .setPositiveButton("确认保存黑名单") { _, _ ->
+                hiddenApps.clear()
+                hiddenApps.addAll(tempHiddenPkgs)
+                // 如果黑名单里的 App 原本在快捷栏里，把它强制踢出去
+                selectedApps.removeAll(hiddenApps)
+                saveData()
+                refreshUI()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
     private fun dpToPx(dp: Float): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
 
     private fun refreshUI() {
@@ -230,7 +340,7 @@ class MainActivity : AppCompatActivity() {
                 currentRow = LinearLayout(this).apply { 
                     orientation = LinearLayout.HORIZONTAL
                     weightSum = columnsPerRow.toFloat()
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(42f))
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f))
                 }
                 previewContainer.addView(currentRow)
             }
@@ -266,11 +376,12 @@ class MainActivity : AppCompatActivity() {
             .putInt("columns", columnsPerRow)
             .putInt("icon_type", currentIconType)
             .putString("selected_apps", selectedApps.joinToString(","))
+            .putString("hidden_apps", hiddenApps.joinToString(",")) // 存入黑名单数据
             .apply()
     }
 }
 
-// ================= 这里往下就是刚才可能被你漏掉的 QuickService！=================
+// ================= 服务端代码 =================
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
