@@ -39,7 +39,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 申请安卓13+通知权限
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -58,7 +57,6 @@ class MainActivity : AppCompatActivity() {
         val rootScroll = ScrollView(this)
         val mainLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 40, 40, 80) }
 
-        // 🟢 开启/更新按钮
         val btnStart = Button(this).apply {
             text = "🚀 保存并开启/刷新通知栏"
             textSize = 16f
@@ -75,7 +73,6 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(btnStart)
 
-        // 🔴 一键关闭按钮
         val btnStop = Button(this).apply {
             text = "🛑 不想用了，一键关闭通知"
             textSize = 16f
@@ -146,16 +143,12 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
-    // 💥 修复版：带计数器、记忆已选状态的极速多选网格
     private fun showGridAddDialog() {
         val pm = packageManager
         
-        // 显示所有应用，不再过滤
         val displayApps = allApps
-        // 复制一份当前已选的列表用于状态记忆
         val tempSelectedPkgs = mutableSetOf<String>().apply { addAll(selectedApps) }
 
-        // 顶部的实时计数器
         val tvCounter = TextView(this).apply {
             text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
             textSize = 16f
@@ -188,7 +181,6 @@ class MainActivity : AppCompatActivity() {
                 imgIcon.setImageDrawable(app.loadIcon(pm))
                 tvName.text = app.loadLabel(pm)
                 
-                // 如果在已选列表里，直接显示遮罩（打勾状态）
                 mask.visibility = if (tempSelectedPkgs.contains(pkg)) View.VISIBLE else View.GONE
                 return view
             }
@@ -205,7 +197,6 @@ class MainActivity : AppCompatActivity() {
                 tempSelectedPkgs.add(pkg)
                 mask.visibility = View.VISIBLE
             }
-            // 点击时实时更新计数器文字
             tvCounter.text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
         }
 
@@ -218,7 +209,6 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setView(layout)
             .setPositiveButton("确认保存") { _, _ ->
-                // 清空旧列表，彻底用新列表覆盖，防止重复添加
                 selectedApps.clear()
                 selectedApps.addAll(tempSelectedPkgs)
                 saveData()
@@ -272,4 +262,116 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveData() {
-        getSharedPreferences("QuickPrefs",
+        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+            .putInt("columns", columnsPerRow)
+            .putInt("icon_type", currentIconType)
+            .putString("selected_apps", selectedApps.joinToString(","))
+            .apply()
+    }
+}
+
+// ================= 这里往下就是刚才可能被你漏掉的 QuickService！=================
+class QuickService : Service() {
+    override fun onBind(intent: Intent?) = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            stopForeground(true)
+        }
+        getSystemService(NotificationManager::class.java).cancel(1)
+    }
+
+    private val iconTypes = intArrayOf(
+        android.R.color.transparent,
+        android.R.drawable.ic_menu_preferences,
+        android.R.drawable.star_on,
+        android.R.drawable.ic_dialog_info,
+        android.R.drawable.sym_def_app_icon
+    )
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        val safeSize = 80 
+        val bitmap = Bitmap.createBitmap(safeSize, safeSize, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, safeSize, safeSize)
+        drawable.draw(canvas)
+        return bitmap
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val manager = getSystemService(NotificationManager::class.java)
+        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+        val currentIconType = prefs.getInt("icon_type", 0) 
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel("quick_top_v2", "置顶快捷通知", NotificationManager.IMPORTANCE_HIGH)
+            channel.setShowBadge(false)
+            channel.setSound(null, null) 
+            channel.enableVibration(false)
+            manager.createNotificationChannel(channel)
+        }
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
+        
+        builder.setSmallIcon(iconTypes[currentIconType])
+               .setContentTitle(" ")
+               .setContentText(" ")
+               .setShowWhen(false)
+               .setOngoing(true)
+               .setCategory(Notification.CATEGORY_SERVICE) 
+               .setSortKey("0000") 
+
+        startForeground(1, builder.build())
+
+        Thread {
+            val pm = packageManager
+            val columns = prefs.getInt("columns", 6)
+            val savedApps = prefs.getString("selected_apps", "") ?: ""
+            val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
+
+            val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
+            
+            for (r in 0..1) {
+                val rowId = resources.getIdentifier("row$r", "id", packageName)
+                if (rowId != 0) {
+                    remoteViews.setViewVisibility(rowId, View.GONE)
+                }
+            }
+
+            for (i in selectedPkgs.indices) {
+                if (i >= 20) break 
+                val row = i / columns 
+                val col = i % columns 
+                val slotIndex = row * 10 + col 
+                
+                val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
+                if (launchIntent != null && slotIndex < 20) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    try {
+                        val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
+                        val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
+                        val rowId = resources.getIdentifier("row$row", "id", packageName)
+                        
+                        if (resId != 0) {
+                            remoteViews.setViewVisibility(rowId, View.VISIBLE)
+                            remoteViews.setImageViewBitmap(resId, bitmap)
+                            remoteViews.setViewVisibility(resId, View.VISIBLE)
+                            remoteViews.setOnClickPendingIntent(resId, pi)
+                        }
+                    } catch (e: Exception) {}
+                }
+            }
+
+            builder.setCustomContentView(remoteViews) 
+                   .setCustomBigContentView(remoteViews) 
+            
+            manager.notify(1, builder.build())
+        }.start()
+
+        return START_STICKY
+    }
+}
