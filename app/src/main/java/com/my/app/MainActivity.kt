@@ -23,9 +23,20 @@ class MainActivity : AppCompatActivity() {
 
     private val selectedApps = mutableListOf<String>()
     private var columnsPerRow = 6
+    private var currentIconType = 0 // 记录当前选择的伪装图标
     private lateinit var allApps: List<ResolveInfo>
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
+
+    // 伪装图标的系统资源 ID 列表
+    private val iconTypes = intArrayOf(
+        android.R.color.transparent,          // 0: 透明 (极简隐形)
+        android.R.drawable.ic_menu_preferences, // 1: 设置齿轮 (最强伪装)
+        android.R.drawable.star_on,           // 2: 小星星
+        android.R.drawable.ic_dialog_info,    // 3: 提示感叹号
+        android.R.drawable.sym_def_app_icon   // 4: 安卓小机器人
+    )
+    private val iconNames = arrayOf("透明隐形 (极简推荐)", "设置齿轮 (最强伪装)", "小星星", "提示感叹号", "安卓机器人")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         
         columnsPerRow = prefs.getInt("columns", 6)
+        currentIconType = prefs.getInt("icon_type", 0) // 读取保存的图标设置
         val savedApps = prefs.getString("selected_apps", "") ?: ""
         if (savedApps.isNotEmpty()) {
             selectedApps.addAll(savedApps.split(","))
@@ -55,7 +67,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 val intent = Intent(this@MainActivity, QuickService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-                Toast.makeText(this@MainActivity, "已生效！(系统后台生成中，0延迟)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！(若未改变，请稍等或重新下拉)", Toast.LENGTH_SHORT).show()
                 moveTaskToBack(true)
                 finish()
             }
@@ -68,6 +80,21 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#F0F0F0")) 
         }
         mainLayout.addView(previewContainer)
+
+        // 💥 新增功能：通知栏图标防社死切换器
+        mainLayout.addView(TextView(this).apply { text = "🎭 防社死：左上角通知图标伪装"; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        val iconSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, iconNames)
+            setSelection(currentIconType)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    currentIconType = position
+                    saveData()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
+        }
+        mainLayout.addView(iconSpinner)
 
         mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         val seekBar = SeekBar(this).apply {
@@ -173,15 +200,14 @@ class MainActivity : AppCompatActivity() {
                 currentRow = LinearLayout(this).apply { 
                     orientation = LinearLayout.HORIZONTAL
                     weightSum = columnsPerRow.toFloat()
-                    // 配合 35dp 修改预览图高度
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(35f))
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(42f))
                 }
                 previewContainer.addView(currentRow)
             }
             val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
             val iconView = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
+                setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
             }
@@ -206,12 +232,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveData() {
-        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit().putInt("columns", columnsPerRow).putString("selected_apps", selectedApps.joinToString(",")).apply()
+        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+            .putInt("columns", columnsPerRow)
+            .putInt("icon_type", currentIconType)
+            .putString("selected_apps", selectedApps.joinToString(","))
+            .apply()
     }
 }
 
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
+
+    // 将伪装图标资源列表移到 Service 里，以便调用
+    private val iconTypes = intArrayOf(
+        android.R.color.transparent,
+        android.R.drawable.ic_menu_preferences,
+        android.R.drawable.star_on,
+        android.R.drawable.ic_dialog_info,
+        android.R.drawable.sym_def_app_icon
+    )
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
         val safeSize = 80 
@@ -224,6 +263,8 @@ class QuickService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
+        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+        val currentIconType = prefs.getInt("icon_type", 0) // 读取用户选的伪装图标
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_DEFAULT)
@@ -232,17 +273,17 @@ class QuickService : Service() {
         }
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_id") else Notification.Builder(this)
-        builder.setSmallIcon(android.R.color.transparent).setContentTitle(" ").setContentText(" ").setShowWhen(false).setOngoing(true)
+        
+        // 💥 核心应用：将小图标设置为用户选择的伪装图标！
+        builder.setSmallIcon(iconTypes[currentIconType]).setContentTitle(" ").setContentText(" ").setShowWhen(false).setOngoing(true)
         startForeground(1, builder.build())
 
         Thread {
             val pm = packageManager
-            val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
             val columns = prefs.getInt("columns", 6)
             val savedApps = prefs.getString("selected_apps", "") ?: ""
             val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
 
-            // 💥 移除折叠视图概念，所有图标硬塞进主视图
             val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
             
             for (r in 0..1) {
@@ -253,7 +294,7 @@ class QuickService : Service() {
             }
 
             for (i in selectedPkgs.indices) {
-                if (i >= 20) break // 最多 2 行，每行最多 10 个，总共 20 个
+                if (i >= 20) break 
                 val row = i / columns 
                 val col = i % columns 
                 val slotIndex = row * 10 + col 
@@ -277,7 +318,7 @@ class QuickService : Service() {
             }
 
             builder.setCustomContentView(remoteViews) 
-                   .setCustomBigContentView(remoteViews) // 无论是否展开，都显示 2 行 35dp
+                   .setCustomBigContentView(remoteViews) 
             
             manager.notify(1, builder.build())
         }.start()
