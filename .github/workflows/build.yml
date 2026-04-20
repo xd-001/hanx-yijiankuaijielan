@@ -22,18 +22,23 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # 💥 终极绝杀：直接使用 Gradle 官方插件，强制注入纯净的 Gradle 8.4 环境！
+    # 💥 终极修复：启用 GitHub 云端保险箱，永久保存并复用同一个签名文件！
+    - name: Cache Debug Keystore
+      uses: actions/cache@v4
+      with:
+        path: ~/.android/debug.keystore
+        key: permanent-debug-keystore-v1
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-version: '8.4'
 
-    # 直接使用官方环境打包，彻底抛弃缺失的 gradlew 脚本！
     - name: Build Release APK
       run: gradle assembleRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: 快捷通知-v1.0.2安装包
+        name: 快捷通知-完美版安装包
         path: app/build/outputs/apk/release/app-release.apk
