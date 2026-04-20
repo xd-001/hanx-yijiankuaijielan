@@ -22,21 +22,14 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private val selectedApps = mutableListOf<String>()
-    private val hiddenApps = mutableSetOf<String>() // 💥 新增：黑名单集合
+    private val hiddenApps = mutableSetOf<String>() 
     private var columnsPerRow = 6
     private var currentIconType = 0 
     private lateinit var allApps: List<ResolveInfo>
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
 
-    private val iconTypes = intArrayOf(
-        android.R.color.transparent,          
-        android.R.drawable.ic_menu_preferences, 
-        android.R.drawable.star_on,           
-        android.R.drawable.ic_dialog_info,    
-        android.R.drawable.sym_def_app_icon   
-    )
-    private val iconNames = arrayOf("透明隐形 (极简推荐)", "设置齿轮 (最强伪装)", "小星星", "提示感叹号", "安卓机器人")
+    private val iconNames = arrayOf("🫥 真正透明隐形 (黑科技推荐)", "⚙️ 系统圆环 (最强伪装)", "🔸 菱形小点", "❗ 提示感叹号", "🤖 默认应用图标")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,7 +48,6 @@ class MainActivity : AppCompatActivity() {
             selectedApps.addAll(savedApps.split(","))
         }
         
-        // 读取隐藏黑名单
         val savedHidden = prefs.getString("hidden_apps", "") ?: ""
         if (savedHidden.isNotEmpty()) {
             hiddenApps.addAll(savedHidden.split(","))
@@ -134,7 +126,6 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(seekBar)
 
-        // 💥 新增：黑名单管理按钮
         val btnHideApps = Button(this).apply {
             text = "🚫 把不想看到的 App 关进黑名单"
             setTextColor(Color.parseColor("#666666"))
@@ -163,10 +154,8 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
-    // 💥 选 App 的网格：自动过滤掉黑名单中的软件
     private fun showGridAddDialog() {
         val pm = packageManager
-        // 过滤掉在黑名单里的 App
         val displayApps = allApps.filter { !hiddenApps.contains(it.activityInfo.packageName) }
         val tempSelectedPkgs = mutableSetOf<String>().apply { addAll(selectedApps) }
 
@@ -204,7 +193,7 @@ class MainActivity : AppCompatActivity() {
                 
                 if (tempSelectedPkgs.contains(pkg)) {
                     mask.visibility = View.VISIBLE
-                    mask.setBackgroundColor(Color.parseColor("#884CAF50")) // 半透明绿色遮罩
+                    mask.setBackgroundColor(Color.parseColor("#884CAF50")) 
                 } else {
                     mask.visibility = View.GONE
                 }
@@ -245,7 +234,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // 💥 新增：黑名单专属网格界面
     private fun showHideAppsDialog() {
         val pm = packageManager
         val displayApps = allApps
@@ -256,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 16f
             gravity = Gravity.CENTER
             setPadding(0, 30, 0, 20)
-            setTextColor(Color.parseColor("#F44336")) // 红色字体
+            setTextColor(Color.parseColor("#F44336")) 
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
 
@@ -285,7 +273,7 @@ class MainActivity : AppCompatActivity() {
                 
                 if (tempHiddenPkgs.contains(pkg)) {
                     mask.visibility = View.VISIBLE
-                    mask.setBackgroundColor(Color.parseColor("#88FF0000")) // 半透明红色遮罩代表黑名单
+                    mask.setBackgroundColor(Color.parseColor("#88FF0000")) 
                 } else {
                     mask.visibility = View.GONE
                 }
@@ -319,7 +307,6 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("确认保存黑名单") { _, _ ->
                 hiddenApps.clear()
                 hiddenApps.addAll(tempHiddenPkgs)
-                // 如果黑名单里的 App 原本在快捷栏里，把它强制踢出去
                 selectedApps.removeAll(hiddenApps)
                 saveData()
                 refreshUI()
@@ -376,12 +363,12 @@ class MainActivity : AppCompatActivity() {
             .putInt("columns", columnsPerRow)
             .putInt("icon_type", currentIconType)
             .putString("selected_apps", selectedApps.joinToString(","))
-            .putString("hidden_apps", hiddenApps.joinToString(",")) // 存入黑名单数据
+            .putString("hidden_apps", hiddenApps.joinToString(",")) 
             .apply()
     }
 }
 
-// ================= 服务端代码 =================
+// ================= 服务端核心代码 =================
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
@@ -394,14 +381,6 @@ class QuickService : Service() {
         }
         getSystemService(NotificationManager::class.java).cancel(1)
     }
-
-    private val iconTypes = intArrayOf(
-        android.R.color.transparent,
-        android.R.drawable.ic_menu_preferences,
-        android.R.drawable.star_on,
-        android.R.drawable.ic_dialog_info,
-        android.R.drawable.sym_def_app_icon
-    )
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
         val safeSize = 80 
@@ -427,8 +406,41 @@ class QuickService : Service() {
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
         
-        builder.setSmallIcon(iconTypes[currentIconType])
-               .setContentTitle(" ")
+        // 💥 终极防拦截：现场纯代码手绘图标，完美骗过国产系统的审查！
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentIconType != 4) {
+            // 创建一张被系统认可的透明底画板
+            val bmp = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            val paint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                color = Color.WHITE 
+                style = android.graphics.Paint.Style.FILL
+            }
+
+            when (currentIconType) {
+                0 -> { /* 透明隐形：什么都不画，交一张完全空白合法的白卷！*/ }
+                1 -> { // 圆环伪装
+                    canvas.drawCircle(50f, 50f, 35f, paint)
+                    paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                    canvas.drawCircle(50f, 50f, 15f, paint) 
+                }
+                2 -> { // 菱形伪装
+                    canvas.save()
+                    canvas.rotate(45f, 50f, 50f)
+                    canvas.drawRect(30f, 30f, 70f, 70f, paint)
+                    canvas.restore()
+                }
+                3 -> { // 提示符感叹号
+                    canvas.drawRect(42f, 15f, 58f, 65f, paint)
+                    canvas.drawRect(42f, 75f, 58f, 90f, paint)
+                }
+            }
+            builder.setSmallIcon(android.graphics.drawable.Icon.createWithBitmap(bmp))
+        } else {
+            builder.setSmallIcon(android.R.drawable.sym_def_app_icon) // 选了默认图标
+        }
+
+        builder.setContentTitle(" ")
                .setContentText(" ")
                .setShowWhen(false)
                .setOngoing(true)
