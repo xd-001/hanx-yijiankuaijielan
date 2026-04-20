@@ -57,9 +57,10 @@ class MainActivity : AppCompatActivity() {
         val rootScroll = ScrollView(this)
         val mainLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 40, 40, 80) }
 
+        // 🟢 开启/更新按钮
         val btnStart = Button(this).apply {
-            text = "🚀 保存并刷新通知栏"
-            textSize = 18f
+            text = "🚀 保存并开启/刷新通知栏"
+            textSize = 16f
             setPadding(0, 30, 0, 30)
             setBackgroundColor(Color.parseColor("#4CAF50"))
             setTextColor(Color.WHITE)
@@ -72,6 +73,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
         mainLayout.addView(btnStart)
+
+        // 🔴 新增：一键关闭按钮
+        val btnStop = Button(this).apply {
+            text = "🛑 不想用了，一键关闭通知"
+            textSize = 16f
+            setPadding(0, 30, 0, 30)
+            setBackgroundColor(Color.parseColor("#F44336")) // 红色警示
+            setTextColor(Color.WHITE)
+            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            params.setMargins(0, 20, 0, 0) // 距离上面按钮留点缝隙
+            layoutParams = params
+            setOnClickListener {
+                // 彻底销毁服务并清空通知栏
+                stopService(Intent(this@MainActivity, QuickService::class.java))
+                getSystemService(NotificationManager::class.java).cancel(1)
+                Toast.makeText(this@MainActivity, "已彻底关闭并清理！", Toast.LENGTH_SHORT).show()
+            }
+        }
+        mainLayout.addView(btnStop)
 
         mainLayout.addView(TextView(this).apply { text = "👀 1:1 真实预览图："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         previewContainer = LinearLayout(this).apply { 
@@ -241,6 +261,17 @@ class MainActivity : AppCompatActivity() {
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
+    // 🔴 保险机制：服务销毁时强行撕掉通知栏，避免任何残留
+    override fun onDestroy() {
+        super.onDestroy()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            stopForeground(true)
+        }
+        getSystemService(NotificationManager::class.java).cancel(1)
+    }
+
     private val iconTypes = intArrayOf(
         android.R.color.transparent,
         android.R.drawable.ic_menu_preferences,
@@ -306,9 +337,7 @@ class QuickService : Service() {
                 
                 val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
                 if (launchIntent != null && slotIndex < 20) {
-                    // 🚀 核心修复：针对小米澎湃拦截添加新任务栈标识
                     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    // PendingIntent 加上 FLAG_UPDATE_CURRENT 防止意图缓存
                     val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                     try {
                         val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
