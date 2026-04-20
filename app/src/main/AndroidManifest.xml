@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 基础权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     
-    <!-- 💥 修改这里：application 的 label 是桌面上显示的名字 -->
+    <!-- 💥 核心修复 1：新增专门对付安卓 14 (API 34) 严格审查的专属权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    
     <application 
         android:label="快捷通知" 
         android:icon="@drawable/app_icon"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         
-        <!-- activity 是打开的主界面名字 -->
         <activity android:name=".MainActivity" android:label="快捷通知" android:exported="true" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -18,7 +20,10 @@
             </intent-filter>
         </activity>
         
-        <!-- 💥 保持这个为纯空格！它是管通知栏显示的，必须空着 -->
-        <service android:name=".QuickService" android:label=" " android:exported="false" />
+        <!-- 💥 核心修复 2：加上 foregroundServiceType="dataSync" 骗过系统审查，防止后台被直接绞杀 -->
+        <service android:name=".QuickService" 
+                 android:label=" " 
+                 android:exported="false" 
+                 android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
