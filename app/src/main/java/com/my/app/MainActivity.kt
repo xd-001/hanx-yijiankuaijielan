@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 申请安卓13+通知权限
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -74,18 +75,17 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(btnStart)
 
-        // 🔴 新增：一键关闭按钮
+        // 🔴 一键关闭按钮
         val btnStop = Button(this).apply {
             text = "🛑 不想用了，一键关闭通知"
             textSize = 16f
             setPadding(0, 30, 0, 30)
-            setBackgroundColor(Color.parseColor("#F44336")) // 红色警示
+            setBackgroundColor(Color.parseColor("#F44336"))
             setTextColor(Color.WHITE)
             val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            params.setMargins(0, 20, 0, 0) // 距离上面按钮留点缝隙
+            params.setMargins(0, 20, 0, 0)
             layoutParams = params
             setOnClickListener {
-                // 彻底销毁服务并清空通知栏
                 stopService(Intent(this@MainActivity, QuickService::class.java))
                 getSystemService(NotificationManager::class.java).cancel(1)
                 Toast.makeText(this@MainActivity, "已彻底关闭并清理！", Toast.LENGTH_SHORT).show()
@@ -146,25 +146,39 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
+    // 💥 修复版：带计数器、记忆已选状态的极速多选网格
     private fun showGridAddDialog() {
         val pm = packageManager
+        
+        // 显示所有应用，不再过滤
+        val displayApps = allApps
+        // 复制一份当前已选的列表用于状态记忆
+        val tempSelectedPkgs = mutableSetOf<String>().apply { addAll(selectedApps) }
+
+        // 顶部的实时计数器
+        val tvCounter = TextView(this).apply {
+            text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(0, 30, 0, 20)
+            setTextColor(Color.parseColor("#4CAF50"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
         val gridView = GridView(this).apply {
             numColumns = 4 
             verticalSpacing = 20
             horizontalSpacing = 10
-            setPadding(20, 20, 20, 20)
+            setPadding(20, 0, 20, 20)
         }
 
-        val unselectedApps = allApps.filter { !selectedApps.contains(it.activityInfo.packageName) }
-        val tempSelectedPkgs = mutableSetOf<String>()
-
         val adapter = object : BaseAdapter() {
-            override fun getCount() = unselectedApps.size
-            override fun getItem(pos: Int) = unselectedApps[pos]
+            override fun getCount() = displayApps.size
+            override fun getItem(pos: Int) = displayApps[pos]
             override fun getItemId(pos: Int) = pos.toLong()
             override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
                 val view = convertView ?: layoutInflater.inflate(R.layout.item_grid_app, parent, false)
-                val app = unselectedApps[position]
+                val app = displayApps[position]
                 val pkg = app.activityInfo.packageName
 
                 val imgIcon = view.findViewById<ImageView>(R.id.img_icon)
@@ -174,6 +188,7 @@ class MainActivity : AppCompatActivity() {
                 imgIcon.setImageDrawable(app.loadIcon(pm))
                 tvName.text = app.loadLabel(pm)
                 
+                // 如果在已选列表里，直接显示遮罩（打勾状态）
                 mask.visibility = if (tempSelectedPkgs.contains(pkg)) View.VISIBLE else View.GONE
                 return view
             }
@@ -181,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         gridView.adapter = adapter
 
         gridView.setOnItemClickListener { _, view, position, _ ->
-            val pkg = unselectedApps[position].activityInfo.packageName
+            val pkg = displayApps[position].activityInfo.packageName
             val mask = view.findViewById<FrameLayout>(R.id.mask_checked)
             if (tempSelectedPkgs.contains(pkg)) {
                 tempSelectedPkgs.remove(pkg)
@@ -190,17 +205,24 @@ class MainActivity : AppCompatActivity() {
                 tempSelectedPkgs.add(pkg)
                 mask.visibility = View.VISIBLE
             }
+            // 点击时实时更新计数器文字
+            tvCounter.text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(tvCounter)
+            addView(gridView)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("像点泡泡纸一样连点你想加的 App：")
-            .setView(gridView)
-            .setPositiveButton("确认添加") { _, _ ->
-                if (tempSelectedPkgs.isNotEmpty()) {
-                    selectedApps.addAll(tempSelectedPkgs)
-                    saveData()
-                    refreshUI()
-                }
+            .setView(layout)
+            .setPositiveButton("确认保存") { _, _ ->
+                // 清空旧列表，彻底用新列表覆盖，防止重复添加
+                selectedApps.clear()
+                selectedApps.addAll(tempSelectedPkgs)
+                saveData()
+                refreshUI()
             }
             .setNegativeButton("取消", null)
             .show()
@@ -250,116 +272,4 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveData() {
-        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
-            .putInt("columns", columnsPerRow)
-            .putInt("icon_type", currentIconType)
-            .putString("selected_apps", selectedApps.joinToString(","))
-            .apply()
-    }
-}
-
-class QuickService : Service() {
-    override fun onBind(intent: Intent?) = null
-
-    // 🔴 保险机制：服务销毁时强行撕掉通知栏，避免任何残留
-    override fun onDestroy() {
-        super.onDestroy()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            stopForeground(true)
-        }
-        getSystemService(NotificationManager::class.java).cancel(1)
-    }
-
-    private val iconTypes = intArrayOf(
-        android.R.color.transparent,
-        android.R.drawable.ic_menu_preferences,
-        android.R.drawable.star_on,
-        android.R.drawable.ic_dialog_info,
-        android.R.drawable.sym_def_app_icon
-    )
-
-    private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        val safeSize = 80 
-        val bitmap = Bitmap.createBitmap(safeSize, safeSize, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, safeSize, safeSize)
-        drawable.draw(canvas)
-        return bitmap
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val manager = getSystemService(NotificationManager::class.java)
-        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        val currentIconType = prefs.getInt("icon_type", 0) 
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("quick_top_v2", "置顶快捷通知", NotificationManager.IMPORTANCE_HIGH)
-            channel.setShowBadge(false)
-            channel.setSound(null, null) 
-            channel.enableVibration(false)
-            manager.createNotificationChannel(channel)
-        }
-
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
-        
-        builder.setSmallIcon(iconTypes[currentIconType])
-               .setContentTitle(" ")
-               .setContentText(" ")
-               .setShowWhen(false)
-               .setOngoing(true)
-               .setCategory(Notification.CATEGORY_SERVICE) 
-               .setSortKey("0000") 
-
-        startForeground(1, builder.build())
-
-        Thread {
-            val pm = packageManager
-            val columns = prefs.getInt("columns", 6)
-            val savedApps = prefs.getString("selected_apps", "") ?: ""
-            val selectedPkgs = if (savedApps.isNotEmpty()) savedApps.split(",") else emptyList()
-
-            val remoteViews = RemoteViews(packageName, R.layout.layout_notification)
-            
-            for (r in 0..1) {
-                val rowId = resources.getIdentifier("row$r", "id", packageName)
-                if (rowId != 0) {
-                    remoteViews.setViewVisibility(rowId, View.GONE)
-                }
-            }
-
-            for (i in selectedPkgs.indices) {
-                if (i >= 20) break 
-                val row = i / columns 
-                val col = i % columns 
-                val slotIndex = row * 10 + col 
-                
-                val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
-                if (launchIntent != null && slotIndex < 20) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    try {
-                        val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
-                        val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
-                        val rowId = resources.getIdentifier("row$row", "id", packageName)
-                        
-                        if (resId != 0) {
-                            remoteViews.setViewVisibility(rowId, View.VISIBLE)
-                            remoteViews.setImageViewBitmap(resId, bitmap)
-                            remoteViews.setViewVisibility(resId, View.VISIBLE)
-                            remoteViews.setOnClickPendingIntent(resId, pi)
-                        }
-                    } catch (e: Exception) {}
-                }
-            }
-
-            builder.setCustomContentView(remoteViews) 
-                   .setCustomBigContentView(remoteViews) 
-            
-            manager.notify(1, builder.build())
-        }.start()
-
-        return START_STICKY
-    }
-}
+        getSharedPreferences("QuickPrefs",
