@@ -1,36 +1,38 @@
-name: Build Android APK
+name: Android Build
+
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
+  workflow_dispatch: # 允许你在网页上随时手动点击打包
+
+# 💥 核心修复 1：强制使用 Node 24，彻底消除 Node 20 弃用的黄字警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: set up JDK 17
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-version: '8.4'
+        cache: gradle
 
-    # 💥 核心：在打包前，通过命令行瞬间生成一个属于你的、独一无二的固定签名库！
-    - name: Generate Keystore
-      run: |
-        keytool -genkey -v -keystore app/keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key0 -dname "CN=MyApp, OU=MyOrg, O=MyCompany, L=MyCity, ST=MyState, C=US" -storepass 123456 -keypass 123456
-        
-    # 💥 核心：改为打“正式版（Release）”的包
-    - name: Build with Gradle
-      run: gradle assembleRelease
-      
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Release APK
+      run: ./gradlew assembleRelease
+
+    # 💥 核心修复 2：获取签名后的正式版 APK（去掉了 -unsigned）
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: QuickLauncher-V1.0.2-Release
-        # 💥 路径改为 release 文件夹
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        name: 快捷通知-v1.0.2安装包 # 这里顺便帮你把下载下来的压缩包名字改好看了
+        path: app/build/outputs/apk/release/app-release.apk
