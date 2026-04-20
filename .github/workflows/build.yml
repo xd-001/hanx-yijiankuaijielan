@@ -23,9 +23,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 💥 核心修复：如果仓库里没传 gradlew 文件，让 GitHub 自动生成它！
+    # 💥 核心修复：强制指定生成稳定版 Gradle 8.4，防止云端自动使用过新的 9.4 导致不兼容崩溃！
     - name: Generate Gradle wrapper
-      run: gradle wrapper
+      run: gradle wrapper --gradle-version 8.4
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
