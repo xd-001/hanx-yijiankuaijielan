@@ -6,22 +6,12 @@ android {
     namespace 'com.my.app'
     compileSdk 33
 
-    // 💥 终极解决方案：配置一个万能的专属“本地固定签名”
-    signingConfigs {
-        release {
-            storeFile file("keystore.jks")
-            storePassword "123456"
-            keyAlias "key0"
-            keyPassword "123456"
-        }
-    }
-
     defaultConfig {
         applicationId "com.my.app"
         minSdk 26
         targetSdk 30
-        versionCode 3 // 顺手把底层版本号升到 3
-        versionName "1.0.2" // 表面版本号升到 1.0.2
+        versionCode 3 
+        versionName "1.0.2" // 现在的版本是 1.0.2
         resConfigs "zh"
     }
     
@@ -30,11 +20,12 @@ android {
             minifyEnabled false
             shrinkResources false
         }
-        // 💥 让正式版使用我们刚才配置的专属签名
         release {
             minifyEnabled false
             shrinkResources false
-            signingConfig signingConfigs.release
+            // 💥 终极极简方案：直接套用默认的 debug 签名！
+            // 省去了繁琐的 JKS 文件，且以后每次生成的安装包签名绝对一致，完美覆盖安装！
+            signingConfig signingConfigs.debug 
         }
     }
     
