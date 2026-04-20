@@ -264,24 +264,22 @@ class QuickService : Service() {
         val currentIconType = prefs.getInt("icon_type", 0) 
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // 💥 洗牌重来：启用一个名字叫 quick_top_v2 的全新频道，强制应用最高优先级！
             val channel = NotificationChannel("quick_top_v2", "置顶快捷通知", NotificationManager.IMPORTANCE_HIGH)
             channel.setShowBadge(false)
-            channel.setSound(null, null) // 强制静音，防止它发出声音或弹窗
+            channel.setSound(null, null) 
             channel.enableVibration(false)
             manager.createNotificationChannel(channel)
         }
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
         
-        // 💥 置顶黑科技三连击：
         builder.setSmallIcon(iconTypes[currentIconType])
                .setContentTitle(" ")
                .setContentText(" ")
                .setShowWhen(false)
                .setOngoing(true)
-               .setCategory(Notification.CATEGORY_SERVICE) // 伪装成核心服务
-               .setSortKey("0000") // 字母表强制第一位排序！
+               .setCategory(Notification.CATEGORY_SERVICE) 
+               .setSortKey("0000") 
 
         startForeground(1, builder.build())
 
@@ -308,7 +306,10 @@ class QuickService : Service() {
                 
                 val launchIntent = pm.getLaunchIntentForPackage(selectedPkgs[i])
                 if (launchIntent != null && slotIndex < 20) {
-                    val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_IMMUTABLE)
+                    // 🚀 核心修复：针对小米澎湃拦截添加新任务栈标识
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    // PendingIntent 加上 FLAG_UPDATE_CURRENT 防止意图缓存
+                    val pi = PendingIntent.getActivity(this, i, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                     try {
                         val bitmap = drawableToBitmap(pm.getApplicationInfo(selectedPkgs[i], 0).loadIcon(pm))
                         val resId = resources.getIdentifier("icon$slotIndex", "id", packageName)
