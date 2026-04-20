@@ -23,18 +23,17 @@ class MainActivity : AppCompatActivity() {
 
     private val selectedApps = mutableListOf<String>()
     private var columnsPerRow = 6
-    private var currentIconType = 0 // 记录当前选择的伪装图标
+    private var currentIconType = 0 
     private lateinit var allApps: List<ResolveInfo>
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
 
-    // 伪装图标的系统资源 ID 列表
     private val iconTypes = intArrayOf(
-        android.R.color.transparent,          // 0: 透明 (极简隐形)
-        android.R.drawable.ic_menu_preferences, // 1: 设置齿轮 (最强伪装)
-        android.R.drawable.star_on,           // 2: 小星星
-        android.R.drawable.ic_dialog_info,    // 3: 提示感叹号
-        android.R.drawable.sym_def_app_icon   // 4: 安卓小机器人
+        android.R.color.transparent,          
+        android.R.drawable.ic_menu_preferences, 
+        android.R.drawable.star_on,           
+        android.R.drawable.ic_dialog_info,    
+        android.R.drawable.sym_def_app_icon   
     )
     private val iconNames = arrayOf("透明隐形 (极简推荐)", "设置齿轮 (最强伪装)", "小星星", "提示感叹号", "安卓机器人")
 
@@ -49,7 +48,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         
         columnsPerRow = prefs.getInt("columns", 6)
-        currentIconType = prefs.getInt("icon_type", 0) // 读取保存的图标设置
+        currentIconType = prefs.getInt("icon_type", 0) 
         val savedApps = prefs.getString("selected_apps", "") ?: ""
         if (savedApps.isNotEmpty()) {
             selectedApps.addAll(savedApps.split(","))
@@ -67,7 +66,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 val intent = Intent(this@MainActivity, QuickService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
-                Toast.makeText(this@MainActivity, "已生效！(若未改变，请稍等或重新下拉)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "已生效！(已开启强制置顶防掉落)", Toast.LENGTH_SHORT).show()
                 moveTaskToBack(true)
                 finish()
             }
@@ -81,7 +80,6 @@ class MainActivity : AppCompatActivity() {
         }
         mainLayout.addView(previewContainer)
 
-        // 💥 新增功能：通知栏图标防社死切换器
         mainLayout.addView(TextView(this).apply { text = "🎭 防社死：左上角通知图标伪装"; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
         val iconSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, iconNames)
@@ -243,7 +241,6 @@ class MainActivity : AppCompatActivity() {
 class QuickService : Service() {
     override fun onBind(intent: Intent?) = null
 
-    // 将伪装图标资源列表移到 Service 里，以便调用
     private val iconTypes = intArrayOf(
         android.R.color.transparent,
         android.R.drawable.ic_menu_preferences,
@@ -264,18 +261,28 @@ class QuickService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
         val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
-        val currentIconType = prefs.getInt("icon_type", 0) // 读取用户选的伪装图标
+        val currentIconType = prefs.getInt("icon_type", 0) 
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("quick_id", " ", NotificationManager.IMPORTANCE_DEFAULT)
+            // 💥 洗牌重来：启用一个名字叫 quick_top_v2 的全新频道，强制应用最高优先级！
+            val channel = NotificationChannel("quick_top_v2", "置顶快捷通知", NotificationManager.IMPORTANCE_HIGH)
             channel.setShowBadge(false)
+            channel.setSound(null, null) // 强制静音，防止它发出声音或弹窗
+            channel.enableVibration(false)
             manager.createNotificationChannel(channel)
         }
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_id") else Notification.Builder(this)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, "quick_top_v2") else Notification.Builder(this)
         
-        // 💥 核心应用：将小图标设置为用户选择的伪装图标！
-        builder.setSmallIcon(iconTypes[currentIconType]).setContentTitle(" ").setContentText(" ").setShowWhen(false).setOngoing(true)
+        // 💥 置顶黑科技三连击：
+        builder.setSmallIcon(iconTypes[currentIconType])
+               .setContentTitle(" ")
+               .setContentText(" ")
+               .setShowWhen(false)
+               .setOngoing(true)
+               .setCategory(Notification.CATEGORY_SERVICE) // 伪装成核心服务
+               .setSortKey("0000") // 字母表强制第一位排序！
+
         startForeground(1, builder.build())
 
         Thread {
