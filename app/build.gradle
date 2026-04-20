@@ -5,15 +5,23 @@ plugins {
 android {
     namespace 'com.my.app'
     compileSdk 33
+
+    // 💥 终极解决方案：配置一个万能的专属“本地固定签名”
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword "123456"
+            keyAlias "key0"
+            keyPassword "123456"
+        }
+    }
+
     defaultConfig {
         applicationId "com.my.app"
         minSdk 26
         targetSdk 30
-        
-        // 💥 修改这里！versionCode 是给机器看的底层版本（每次更新必须+1），versionName 是给人看的版本号
-        versionCode 2
-        versionName "1.0.1"
-        
+        versionCode 3 // 顺手把底层版本号升到 3
+        versionName "1.0.2" // 表面版本号升到 1.0.2
         resConfigs "zh"
     }
     
@@ -21,6 +29,12 @@ android {
         debug {
             minifyEnabled false
             shrinkResources false
+        }
+        // 💥 让正式版使用我们刚才配置的专属签名
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
         }
     }
     
