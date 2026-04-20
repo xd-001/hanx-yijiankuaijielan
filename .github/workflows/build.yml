@@ -3,9 +3,8 @@ name: Android Build
 on:
   push:
     branches: [ "main", "master" ]
-  workflow_dispatch: # 允许你在网页上随时手动点击打包
+  workflow_dispatch: 
 
-# 💥 核心修复 1：强制使用 Node 24，彻底消除 Node 20 弃用的黄字警告
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -24,15 +23,18 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    # 💥 核心修复：如果仓库里没传 gradlew 文件，让 GitHub 自动生成它！
+    - name: Generate Gradle wrapper
+      run: gradle wrapper
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Release APK
       run: ./gradlew assembleRelease
 
-    # 💥 核心修复 2：获取签名后的正式版 APK（去掉了 -unsigned）
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: 快捷通知-v1.0.2安装包 # 这里顺便帮你把下载下来的压缩包名字改好看了
+        name: 快捷通知-v1.0.2安装包
         path: app/build/outputs/apk/release/app-release.apk
