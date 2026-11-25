@@ -511,11 +511,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** 背景档位与强调色各自独立：4 × 6 = 24 种组合，随用户搭 */
+    /** 背景档位与强调色各自独立：5 × 14 种组合，随用户搭 */
     private fun showAppearanceDialog() {
-        showChoiceDialog("背景", AppTheme.appearanceLabels, palette.appearance) { which ->
-            if (which != palette.appearance) {
-                AppTheme.save(this, which, palette.accentId)
+        val order = AppTheme.appearanceOrder
+        val current = order.indexOf(palette.appearance).coerceAtLeast(0)
+        showChoiceDialog("背景", AppTheme.appearanceLabels, current) { which ->
+            val id = order[which]
+            if (id != palette.appearance) {
+                AppTheme.save(this, id, palette.accentId)
                 recreate()   // 颜色全部在 onCreate 里取，重建最省事也最不会漏
             }
         }

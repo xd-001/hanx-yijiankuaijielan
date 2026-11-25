@@ -38,6 +38,7 @@ data class AppTheme(
         const val APPEARANCE_WARM = 1
         const val APPEARANCE_DIM = 2
         const val APPEARANCE_DARK = 3
+        const val APPEARANCE_GREEN = 4
 
         const val ACCENT_PURPLE = 0
         const val ACCENT_BLUE = 1
@@ -50,8 +51,15 @@ data class AppTheme(
         private const val KEY_APPEARANCE = "appearance_id"
         private const val KEY_ACCENT = "accent_id"
 
-        val appearanceLabels = arrayOf("白天", "护眼（暖纸）", "夜间温和", "夜间激进")
-        val accentLabels = arrayOf("紫（默认）", "苹果蓝", "苹果粉", "苹果绿", "苹果橙", "苹果紫")
+        /** 设置页展示顺序：浅色三档在前，深色两档在后。ID 保持不变，旧设置不会错位 */
+        val appearanceOrder = intArrayOf(
+            APPEARANCE_LIGHT, APPEARANCE_WARM, APPEARANCE_GREEN, APPEARANCE_DIM, APPEARANCE_DARK
+        )
+        val appearanceLabels = arrayOf("白天", "护眼暖纸", "护眼绿", "夜间温和", "夜间激进")
+        val accentLabels = arrayOf(
+            "紫（默认）", "苹果蓝", "苹果粉", "苹果绿", "苹果橙", "苹果紫",
+            "护眼暖纸", "简洁白", "少女粉", "高能红", "咸蛋黄", "草苗绿", "宝石蓝", "罗兰紫"
+        )
 
         /** 强调色：(亮色系, 暗色系) */
         private val ACCENTS = arrayOf(
@@ -60,7 +68,15 @@ data class AppTheme(
             intArrayOf(Color.parseColor("#E8457E"), Color.parseColor("#FF7BA6")),
             intArrayOf(Color.parseColor("#34C759"), Color.parseColor("#5FD97C")),
             intArrayOf(Color.parseColor("#F08A00"), Color.parseColor("#FFB340")),
-            intArrayOf(Color.parseColor("#AF52DE"), Color.parseColor("#C983F0"))
+            intArrayOf(Color.parseColor("#AF52DE"), Color.parseColor("#C983F0")),
+            intArrayOf(Color.parseColor("#8A6D3B"), Color.parseColor("#C9A66B")),
+            intArrayOf(Color.parseColor("#5A5A66"), Color.parseColor("#D8D8E0")),
+            intArrayOf(Color.parseColor("#FF8FB1"), Color.parseColor("#FFB3C9")),
+            intArrayOf(Color.parseColor("#E53935"), Color.parseColor("#FF6B6B")),
+            intArrayOf(Color.parseColor("#F2B705"), Color.parseColor("#FFD24A")),
+            intArrayOf(Color.parseColor("#7CB342"), Color.parseColor("#A5D66A")),
+            intArrayOf(Color.parseColor("#1565C0"), Color.parseColor("#5B9BE8")),
+            intArrayOf(Color.parseColor("#7B1FA2"), Color.parseColor("#C77BE8"))
         )
 
         /** 强调色浅底：(亮色系, 暗色系) */
@@ -70,13 +86,21 @@ data class AppTheme(
             intArrayOf(Color.parseColor("#FDECF2"), Color.parseColor("#3A1E2A")),
             intArrayOf(Color.parseColor("#E8F8EC"), Color.parseColor("#14301C")),
             intArrayOf(Color.parseColor("#FFF3E0"), Color.parseColor("#3A2A10")),
-            intArrayOf(Color.parseColor("#F6EBFC"), Color.parseColor("#2E1A3A"))
+            intArrayOf(Color.parseColor("#F6EBFC"), Color.parseColor("#2E1A3A")),
+            intArrayOf(Color.parseColor("#F3EADB"), Color.parseColor("#3A2E1C")),
+            intArrayOf(Color.parseColor("#EFEFF2"), Color.parseColor("#2A2A32")),
+            intArrayOf(Color.parseColor("#FFF0F5"), Color.parseColor("#3A1F2A")),
+            intArrayOf(Color.parseColor("#FDEAEA"), Color.parseColor("#3A1A1A")),
+            intArrayOf(Color.parseColor("#FFF6DA"), Color.parseColor("#3A3010")),
+            intArrayOf(Color.parseColor("#F0F7E6"), Color.parseColor("#24300F")),
+            intArrayOf(Color.parseColor("#E7F0FB"), Color.parseColor("#12273D")),
+            intArrayOf(Color.parseColor("#F5E9FA"), Color.parseColor("#2E1535"))
         )
 
         fun readAppearance(context: Context): Int {
             val v = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getInt(KEY_APPEARANCE, APPEARANCE_LIGHT)
-            return if (v in 0..3) v else APPEARANCE_LIGHT
+            return if (v in 0..APPEARANCE_GREEN) v else APPEARANCE_LIGHT
         }
 
         fun readAccent(context: Context): Int {
@@ -117,6 +141,24 @@ data class AppTheme(
                     accentSoft = accentSoft,
                     successBg = Color.parseColor("#E8EDD8"),
                     successText = Color.parseColor("#3E4A1C"),
+                    dangerBg = Color.parseColor("#F7E3DC"),
+                    dangerText = Color.parseColor("#8E3B24")
+                )
+                APPEARANCE_GREEN -> AppTheme(
+                    appearance = appearance,
+                    accentId = idx,
+                    bg = Color.parseColor("#E9F0E3"),
+                    card = Color.parseColor("#F5FAF0"),
+                    cardSoft = Color.parseColor("#DEE8D5"),
+                    track = Color.parseColor("#D8E3CE"),
+                    divider = Color.parseColor("#CFDCC4"),
+                    textPrimary = Color.parseColor("#29331F"),
+                    textSecondary = Color.parseColor("#6A7A5E"),
+                    textTertiary = Color.parseColor("#A7B79C"),
+                    accent = accent,
+                    accentSoft = accentSoft,
+                    successBg = Color.parseColor("#E3EED3"),
+                    successText = Color.parseColor("#33471E"),
                     dangerBg = Color.parseColor("#F7E3DC"),
                     dangerText = Color.parseColor("#8E3B24")
                 )
