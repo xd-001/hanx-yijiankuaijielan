@@ -30,6 +30,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewContainer: LinearLayout
     private lateinit var selectedListContainer: LinearLayout
     private lateinit var spinSort: Spinner   // 置顶按钮点击后需要同步切到「置顶优先」档
+    private lateinit var rootScroll: ScrollView
+    private lateinit var homePage: LinearLayout
+    private lateinit var appsPage: LinearLayout
+    private lateinit var settingsPage: LinearLayout
+    private lateinit var tvStatus: TextView
+    private lateinit var tvStatusSub: TextView
+    private lateinit var btnPower: TextView
+    private lateinit var chartView: UsageChartView
+    private lateinit var tvChartNumber: TextView
+    private lateinit var tvChartDelta: TextView
+    private lateinit var segToday: TextView
+    private lateinit var segSeven: TextView
+    private lateinit var segAll: TextView
+    private lateinit var navMonitor: TextView
+    private lateinit var navApps: TextView
+    private lateinit var navSettings: TextView
+    private var chartRange = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,47 +69,38 @@ class MainActivity : AppCompatActivity() {
             hiddenApps.addAll(savedHidden.split(","))
         }
 
-        val rootScroll = ScrollView(this)
-        val mainLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 40, 40, 80) }
+        rootScroll = ScrollView(this)
+        val pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110) }
+        appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
+        settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
+        pageHost.addView(homePage)
+        pageHost.addView(appsPage)
+        pageHost.addView(settingsPage)
+        rootScroll.addView(pageHost)
 
-        val btnStart = Button(this).apply {
-            text = "🚀 保存并开启/刷新通知栏"
-            textSize = 16f
-            setPadding(0, 30, 0, 30)
-            setBackgroundColor(Color.parseColor("#4CAF50"))
-            setTextColor(Color.WHITE)
-            setOnClickListener {
-                // 【P0】清除"用户已关闭"标记，让自启/看门狗重新生效
-                NotifyCore.setStoppedByUser(this@MainActivity, false)
-                NotifyCore.startService(this@MainActivity)
-                // 【P0】排上看门狗，之后按设置间隔自检（默认 60 秒）
-                NotifyCore.scheduleWatchdog(this@MainActivity)
-                Toast.makeText(this@MainActivity, "已生效！(开机自启 + 掉线自愈已开启)", Toast.LENGTH_SHORT).show()
-                moveTaskToBack(true)
-                finish()
+        val rootFrame = FrameLayout(this)
+        rootFrame.addView(
+            rootScroll,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        )
+        val bottomNav = buildBottomNav()
+        rootFrame.addView(
+            bottomNav,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                dpToPx(56f),
+                Gravity.BOTTOM
+            ).apply {
+                leftMargin = dpToPx(28f)
+                rightMargin = dpToPx(28f)
+                bottomMargin = dpToPx(18f)
             }
-        }
-        mainLayout.addView(btnStart)
+        )
+        setContentView(rootFrame)
 
-        val btnStop = Button(this).apply {
-            text = "🛑 不想用了，一键关闭通知"
-            textSize = 16f
-            setPadding(0, 30, 0, 30)
-            setBackgroundColor(Color.parseColor("#F44336"))
-            setTextColor(Color.WHITE)
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            params.setMargins(0, 20, 0, 0)
-            layoutParams = params
-            setOnClickListener {
-                // 【P0】先标记 + 停看门狗，否则关掉后下一个 tick 又会被拉起来
-                NotifyCore.setStoppedByUser(this@MainActivity, true)
-                NotifyCore.cancelWatchdog(this@MainActivity)
-                stopService(Intent(this@MainActivity, QuickService::class.java))
-                getSystemService(NotificationManager::class.java).cancel(NotifyCore.NOTIFICATION_ID)
-                Toast.makeText(this@MainActivity, "已彻底关闭（自启和自愈也已停止）", Toast.LENGTH_SHORT).show()
-            }
-        }
-        mainLayout.addView(btnStop)
+        val mainLayout = settingsPage
+        buildHomeDashboard()
 
         // 【P1】打开记录入口
         val btnRecords = Button(this).apply {
@@ -104,9 +112,26 @@ class MainActivity : AppCompatActivity() {
             ).apply { setMargins(0, 20, 0, 0) }
             setOnClickListener { showOpenRecordsDialog() }
         }
-        mainLayout.addView(btnRecords)
+        // 记录入口统一放进设置页，放在备份按钮之后
 
         // 【新增】行为设置区：排序 / 翻页 / 震动
+        settingsPage.addView(TextView(this).apply {
+            text = "设置"
+            textSize = 20f
+            setTextColor(Color.parseColor("#1C1C1E"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 8, 0, 18)
+        })
+        settingsPage.addView(Button(this).apply {
+            text = "📱 编辑应用与排序"
+            textSize = 15f
+            setTextColor(Color.parseColor("#185FA5"))
+            setBackgroundColor(Color.parseColor("#E6F1FB"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 12, 0, 22) }
+            setOnClickListener { showPage(appsPage) }
+        })
         mainLayout.addView(TextView(this).apply {
             text = "⚙️ 行为设置（改完立即生效，不动你的手动队列）"
             textSize = 15f
@@ -285,18 +310,20 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { pruneNow() }
         }
         mainLayout.addView(btnPrune)
+        settingsPage.addView(btnRecords)
 
-        mainLayout.addView(TextView(this).apply { text = "👀 1:1 真实预览图："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
-        previewContainer = LinearLayout(this).apply { 
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#F0F0F0")) 
-        }
-        mainLayout.addView(previewContainer)
+        appsPage.addView(TextView(this).apply {
+            text = "📱 编辑应用与排序"
+            textSize = 20f
+            setTextColor(Color.parseColor("#1F2937"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 10, 0, 8)
+        })
 
         // 【P2】"防社死"图标伪装 UI 已移除（作者确认无效）。
         // 旧配置里的 icon_type 字段被忽略，不会导致崩溃或行为漂移。
 
-        mainLayout.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        appsPage.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 24, 0, 10); setTextColor(Color.GRAY) })
         val seekBar = SeekBar(this).apply {
             max = 6 
             progress = columnsPerRow - 4
@@ -310,7 +337,7 @@ class MainActivity : AppCompatActivity() {
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {}
             })
         }
-        mainLayout.addView(seekBar)
+        appsPage.addView(seekBar)
 
         val btnHideApps = Button(this).apply {
             text = "🚫 把不想看到的 App 关进黑名单"
@@ -321,23 +348,346 @@ class MainActivity : AppCompatActivity() {
             layoutParams = params
             setOnClickListener { showHideAppsDialog() }
         }
-        mainLayout.addView(btnHideApps)
+        appsPage.addView(btnHideApps)
 
         val btnAdd = Button(this).apply {
             text = "➕ 打开网格极速多选"
             setPadding(0, 20, 0, 20)
             setOnClickListener { showGridAddDialog() }
         }
-        mainLayout.addView(btnAdd)
-        
-        mainLayout.addView(TextView(this).apply { text = "📝 已选队列 (上移/下移/删除)："; textSize = 15f; setPadding(0, 40, 0, 10); setTextColor(Color.GRAY) })
+        appsPage.addView(btnAdd)
+
+        appsPage.addView(TextView(this).apply { text = "📝 已选队列 (上移/下移/删除)："; textSize = 15f; setPadding(0, 30, 0, 10); setTextColor(Color.GRAY) })
 
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
-        mainLayout.addView(selectedListContainer)
+        appsPage.addView(selectedListContainer)
 
-        rootScroll.addView(mainLayout)
-        setContentView(rootScroll)
+        updateStatus()
         refreshUI()
+    }
+
+    private fun showPage(page: View) {
+        homePage.visibility = if (page === homePage) View.VISIBLE else View.GONE
+        appsPage.visibility = if (page === appsPage) View.VISIBLE else View.GONE
+        settingsPage.visibility = if (page === settingsPage) View.VISIBLE else View.GONE
+        rootScroll.scrollTo(0, 0)
+        updateNav(page)
+        if (page === homePage) {
+            updateStatus()
+            updateDashboard()
+        }
+    }
+
+    private fun updateStatus() {
+        if (!::tvStatus.isInitialized) return
+        val running = NotifyCore.isNotificationAlive(this)
+        tvStatus.text = if (running) "● 运行中" else "● 已停止"
+        tvStatus.setTextColor(Color.parseColor(if (running) "#6C5CE7" else "#FF6B6B"))
+        tvStatusSub.text = "${selectedApps.size} 个应用 · 今日打开 ${todayOpenCount()} 次"
+        btnPower.text = if (running) "Ⅱ" else "▶"
+        btnPower.setTextColor(Color.parseColor(if (running) "#6C5CE7" else "#FF6B6B"))
+        btnPower.background = roundedBg(
+            Color.parseColor(if (running) "#EFECFE" else "#FCEBEB"),
+            23f
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::selectedListContainer.isInitialized) {
+            refreshUI()
+            updateStatus()
+            updateDashboard()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        when {
+            ::appsPage.isInitialized && appsPage.visibility == View.VISIBLE -> showPage(settingsPage)
+            ::settingsPage.isInitialized && settingsPage.visibility == View.VISIBLE -> showPage(homePage)
+            else -> super.onBackPressed()
+        }
+    }
+
+    private fun roundedBg(color: Int, radiusDp: Float, strokeColor: Int? = null): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dpToPx(radiusDp).toFloat()
+            setColor(color)
+            if (strokeColor != null) setStroke(dpToPx(1f), strokeColor)
+        }
+
+    private fun buildBottomNav(): LinearLayout {
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            background = roundedBg(Color.argb(242, 255, 255, 255), 28f, Color.parseColor("#E5E5EA"))
+        }
+        navMonitor = navItem("监测") { showPage(homePage) }
+        navApps = navItem("应用") { showPage(appsPage) }
+        navSettings = navItem("设置") { showPage(settingsPage) }
+        nav.addView(navMonitor, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        nav.addView(navApps, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        nav.addView(navSettings, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        return nav
+    }
+
+    private fun navItem(label: String, onClick: () -> Unit): TextView = TextView(this).apply {
+        text = label
+        textSize = 12f
+        gravity = Gravity.CENTER
+        setTextColor(Color.parseColor("#8E8E93"))
+        setOnClickListener { onClick() }
+    }
+
+    private fun buildHomeDashboard() {
+        homePage.removeAllViews()
+
+        val statusCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(18f), dpToPx(16f), dpToPx(14f), dpToPx(16f))
+            background = roundedBg(Color.WHITE, 20f)
+        }
+        val statusText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        tvStatus = TextView(this).apply {
+            text = "● 已停止"
+            textSize = 15f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        tvStatusSub = TextView(this).apply {
+            text = "0 个应用 · 今日打开 0 次"
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+            setPadding(0, 5, 0, 0)
+        }
+        statusText.addView(tvStatus)
+        statusText.addView(tvStatusSub)
+        statusCard.addView(statusText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        btnPower = TextView(this).apply {
+            text = "▶"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#6C5CE7"))
+            background = roundedBg(Color.parseColor("#EFECFE"), 23f)
+            setOnClickListener { toggleService() }
+        }
+        statusCard.addView(btnPower, LinearLayout.LayoutParams(dpToPx(46f), dpToPx(46f)))
+        homePage.addView(
+            statusCard,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dpToPx(12f) }
+        )
+
+        val seg = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            background = roundedBg(Color.parseColor("#ECECEF"), 18f)
+        }
+        segToday = segmentItem("今日", 0)
+        segSeven = segmentItem("7 天", 1)
+        segAll = segmentItem("全部", 2)
+        seg.addView(segToday, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        seg.addView(segSeven, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        seg.addView(segAll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        homePage.addView(
+            seg,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36f))
+                .apply { bottomMargin = dpToPx(12f) }
+        )
+
+        val chartCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(18f), dpToPx(16f), dpToPx(18f), dpToPx(8f))
+            background = roundedBg(Color.WHITE, 20f)
+        }
+        chartCard.addView(TextView(this).apply {
+            text = "打开次数"
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+        })
+        val numRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
+        tvChartNumber = TextView(this).apply {
+            text = "0"
+            textSize = 24f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(Color.parseColor("#1C1C1E"))
+        }
+        tvChartDelta = TextView(this).apply {
+            text = "较昨日 +0"
+            textSize = 11f
+            setTextColor(Color.parseColor("#6C5CE7"))
+            setPadding(dpToPx(8f), 0, 0, dpToPx(4f))
+        }
+        numRow.addView(tvChartNumber)
+        numRow.addView(tvChartDelta)
+        chartCard.addView(numRow)
+        chartView = UsageChartView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(100f))
+        }
+        chartCard.addView(chartView)
+        homePage.addView(
+            chartCard,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dpToPx(12f) }
+        )
+
+        val previewCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(18f), dpToPx(14f), dpToPx(18f), dpToPx(12f))
+            background = roundedBg(Color.WHITE, 20f)
+            setOnClickListener { showPage(appsPage) }
+        }
+        previewCard.addView(TextView(this).apply {
+            text = "通知栏预览"
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+        })
+        previewContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(10f), 0, dpToPx(6f))
+        }
+        previewCard.addView(previewContainer)
+        previewCard.addView(TextView(this).apply {
+            text = "点按进入应用页"
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+        })
+        homePage.addView(
+            previewCard,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        )
+
+        updateSegments()
+        updateStatus()
+        updateDashboard()
+        updateNav(homePage)
+    }
+
+    private fun segmentItem(label: String, range: Int): TextView = TextView(this).apply {
+        text = label
+        textSize = 12f
+        gravity = Gravity.CENTER
+        setTextColor(Color.parseColor("#8E8E93"))
+        setOnClickListener {
+            chartRange = range
+            updateSegments()
+            updateDashboard()
+        }
+    }
+
+    private fun updateSegments() {
+        if (!::segToday.isInitialized) return
+        val items = listOf(segToday to 0, segSeven to 1, segAll to 2)
+        for ((view, range) in items) {
+            val active = chartRange == range
+            view.background = if (active) roundedBg(Color.WHITE, 12f) else null
+            view.setTextColor(Color.parseColor(if (active) "#1C1C1E" else "#8E8E93"))
+            view.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        }
+    }
+
+    private fun updateNav(page: View) {
+        if (!::navMonitor.isInitialized) return
+        val active = when (page) {
+            homePage -> 0
+            appsPage -> 1
+            settingsPage -> 2
+            else -> 0
+        }
+        val items = listOf(navMonitor to 0, navApps to 1, navSettings to 2)
+        for ((view, index) in items) {
+            val on = active == index
+            view.background = if (on) roundedBg(Color.parseColor("#EFECFE"), 24f) else null
+            view.setTextColor(Color.parseColor(if (on) "#6C5CE7" else "#8E8E93"))
+            view.setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        }
+    }
+
+    private fun toggleService() {
+        if (NotifyCore.isNotificationAlive(this)) {
+            NotifyCore.setStoppedByUser(this, true)
+            NotifyCore.cancelWatchdog(this)
+            stopService(Intent(this, QuickService::class.java))
+            getSystemService(NotificationManager::class.java).cancel(NotifyCore.NOTIFICATION_ID)
+            Toast.makeText(this, "通知服务已停止", Toast.LENGTH_SHORT).show()
+        } else {
+            NotifyCore.setStoppedByUser(this, false)
+            NotifyCore.startService(this)
+            NotifyCore.scheduleWatchdog(this)
+            Toast.makeText(this, "已开启通知服务", Toast.LENGTH_SHORT).show()
+        }
+        updateStatus()
+        updateDashboard()
+    }
+
+    private fun todayStart(): Long =
+        java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    private fun todayOpenCount(): Int {
+        val start = todayStart()
+        return NotifyCore.getOpenRecords(this).count { it.second >= start }
+    }
+
+    private fun yesterdayOpenCount(): Int {
+        val start = todayStart()
+        val from = start - 86_400_000L
+        return NotifyCore.getOpenRecords(this).count { it.second in from until start }
+    }
+
+    private fun updateDashboard() {
+        if (!::chartView.isInitialized) return
+        val records = NotifyCore.getOpenRecords(this)
+        val now = System.currentTimeMillis()
+        val start = todayStart()
+        val day = 86_400_000L
+
+        val values: List<Int>
+        val total: Int
+        val left: String
+        val right: String
+        when (chartRange) {
+            0 -> {
+                total = records.count { it.second >= start }
+                values = (11 downTo 0).map { h ->
+                    val from = now - h * 3_600_000L
+                    records.count { it.second in from until from + 3_600_000L }
+                }
+                left = "12h前"
+                right = "现在"
+            }
+            1 -> {
+                total = records.count { it.second >= start - 6 * day }
+                values = (6 downTo 0).map { d ->
+                    val from = start - d * day
+                    records.count { it.second in from until from + day }
+                }
+                left = "7天前"
+                right = "今天"
+            }
+            else -> {
+                total = records.size
+                values = (13 downTo 0).map { d ->
+                    val from = start - d * day
+                    records.count { it.second in from until from + day }
+                }
+                left = "14天前"
+                right = "今天"
+            }
+        }
+        tvChartNumber.text = total.toString()
+        tvChartDelta.text = when (chartRange) {
+            0 -> {
+                val diff = todayOpenCount() - yesterdayOpenCount()
+                if (diff >= 0) "较昨日 +$diff" else "较昨日 $diff"
+            }
+            1 -> "近 7 天"
+            else -> "累计"
+        }
+        chartView.setData(values, left, right)
     }
 
     private fun showGridAddDialog() {
@@ -511,28 +861,37 @@ class MainActivity : AppCompatActivity() {
     private fun refreshUI() {
         val pm = packageManager
         previewContainer.removeAllViews()
+        val previewApps = selectedApps.take(20)
+        val previewRows = maxOf(1, (previewApps.size + columnsPerRow - 1) / columnsPerRow)
+        val previewRowHeight = minOf(dpToPx(44f), dpToPx(200f) / previewRows).coerceAtLeast(dpToPx(24f))
         var currentRow: LinearLayout? = null
-        
-        for (i in selectedApps.indices) {
+
+        for (i in previewApps.indices) {
             if (i % columnsPerRow == 0) {
                 currentRow = LinearLayout(this).apply { 
                     orientation = LinearLayout.HORIZONTAL
                     weightSum = columnsPerRow.toFloat()
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48f))
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, previewRowHeight)
                 }
                 previewContainer.addView(currentRow)
             }
-            val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
+            val app = allApps.find { it.activityInfo.packageName == previewApps[i] }
             val iconView = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+                setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
                 scaleType = ImageView.ScaleType.FIT_CENTER
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dpToPx(8f).toFloat()
+                    setColor(Color.parseColor("#F3F4F6"))
+                }
+                clipToOutline = true
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
             }
             currentRow?.addView(iconView)
         }
 
         selectedListContainer.removeAllViews()
+        val openCounts = NotifyCore.getOpenCounts(this)
         for (i in selectedApps.indices) {
             val app = allApps.find { it.activityInfo.packageName == selectedApps[i] }
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 15, 0, 15) }
@@ -545,6 +904,12 @@ class MainActivity : AppCompatActivity() {
                 setPadding(30, 0, 0, 0)
                 setTextColor(if (isPinned) Color.parseColor("#E65100") else Color.parseColor("#333333"))
                 layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+            })
+            row.addView(TextView(this).apply {
+                text = "${openCounts[selectedApps[i]] ?: 0} 次"
+                textSize = 12f
+                setTextColor(Color.parseColor("#6B7280"))
+                setPadding(8, 0, 8, 0)
             })
             // 【新增】置顶开关：切 pinned_apps，不改手动队列；若当前不是置顶档则自动切过去
             row.addView(Button(this).apply {
@@ -570,6 +935,8 @@ class MainActivity : AppCompatActivity() {
             })
             selectedListContainer.addView(row)
         }
+        updateStatus()
+        updateDashboard()
     }
 
     private fun swap(i: Int, j: Int) {
@@ -624,6 +991,11 @@ class MainActivity : AppCompatActivity() {
         fun renderRecords() {
             val limit = limitValues[selectedIndex]
             val records = NotifyCore.getOpenRecords(this)
+            fun labelOf(pkg: String): String = try {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            } catch (e: Exception) {
+                pkg
+            }
             tv.text = when {
                 limit == NotifyCore.RECORD_OFF ->
                     "记录功能已关闭，历史记录也已清空。"
@@ -632,14 +1004,23 @@ class MainActivity : AppCompatActivity() {
                 else -> {
                     // 无限制时最多渲染 500 行，防止超长文本把对话框卡死（数据本身不裁剪）
                     val shown = records.take(500)
-                    val header = if (records.size > 500)
-                        "共 ${records.size} 条，仅显示最近 500 条：\n"
-                    else "共 ${records.size} 条：\n"
+                    val counts = NotifyCore.getOpenCounts(this)
+                    val summary = counts.entries.sortedByDescending { it.value }.take(30)
+                        .joinToString("\n") { (pkg, n) -> "${labelOf(pkg)}  ·  $n 次" }
+                    val header = buildString {
+                        if (counts.isNotEmpty()) {
+                            append("累计打开次数（按应用）：\n")
+                            append(summary)
+                            append("\n\n")
+                        }
+                        if (records.size > 500) {
+                            append("共 ${records.size} 条，仅显示最近 500 条：\n")
+                        } else {
+                            append("共 ${records.size} 条：\n")
+                        }
+                    }
                     header + shown.joinToString("\n") { (pkg, ts) ->
-                        val label = try {
-                            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-                        } catch (e: Exception) { pkg }
-                        "$label  ·  ${sdf.format(java.util.Date(ts))}"
+                        "${labelOf(pkg)}  ·  ${sdf.format(java.util.Date(ts))}"
                     }
                 }
             }

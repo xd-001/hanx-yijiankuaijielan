@@ -60,13 +60,15 @@ jobs:
       if: github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v1.0.10
-        name: 快捷通知.1.10
+        tag_name: v1.1.0
+        name: 快捷通知.1.1
         body: |
-          快捷通知.1.10
-          - 修复开机自启：去掉 BootReceiver 里不可靠的 3 秒 postDelayed
-          - 广播内立即拉起前台服务，并加 5 秒一次性 alarm 兜底
-          - 移除点击应用时“打开 XX”的 Toast，仅保留震动反馈
-          - 其余功能与 1.09 一致
+          快捷通知.1.1
+          - 主界面极简改版：状态胶囊 + 圆形通知预览 + 开启/刷新 + 停止
+          - 点按圆形预览进入设置；编辑应用与排序收进二级页
+          - 应用图标保持圆角矩形显示
+          - 新增累计打开次数：队列和打开记录里显示次数
+          - 记录上限只裁剪明细，不清空累计次数
+          - 保留 1.10 的开机自启修复和“打开 XX”Toast 移除
         files: app/build/outputs/apk/release/app-release.apk
         make_latest: true

@@ -54,6 +54,7 @@ object NotifyCore {
     private const val PREFS = "QuickPrefs"
     private const val PREFS_LOG = "OpenLog"
     private const val KEY_RECORDS = "records"
+    private const val KEY_OPEN_COUNTS = "open_counts"
     private const val KEY_RECORD_LIMIT = "record_limit"
 
     // 记录上限：-1 = 关闭（完全不写），0 = 无限制，>0 = 具体条数
@@ -220,14 +221,14 @@ object NotifyCore {
 
         return when (getSortMode(context)) {
             SORT_FREQ_ALL -> {
-                val counts = getOpenRecords(context).groupingBy { it.first }.eachCount()
+                val counts = getOpenCounts(context)
                 pkgs.sortedByDescending { counts[it] ?: 0 }
             }
             SORT_HYBRID -> {
                 val head = pkgs.take(ROW_FIRST_COUNT)              // 第一行定死
                 val tail = pkgs.drop(ROW_FIRST_COUNT)              // 其余按频率
                 if (tail.isEmpty()) head else {
-                    val counts = getOpenRecords(context).groupingBy { it.first }.eachCount()
+                    val counts = getOpenCounts(context)
                     head + tail.sortedByDescending { counts[it] ?: 0 }
                 }
             }
@@ -542,6 +543,22 @@ object NotifyCore {
         if (limit == RECORD_OFF) clearOpenRecords(context)
     }
 
+    private fun parseOpenCounts(raw: String): MutableMap<String, Int> {
+        val out = mutableMapOf<String, Int>()
+        raw.split(";").filter { it.isNotEmpty() }.forEach { entry ->
+            val parts = entry.split("|")
+            if (parts.size == 2) {
+                val n = parts[1].toIntOrNull()
+                if (n != null && n > 0) out[parts[0]] = n
+            }
+        }
+        return out
+    }
+
+    private fun serializeOpenCounts(counts: Map<String, Int>): String =
+        counts.entries.filter { it.value > 0 }
+            .joinToString(";") { "${it.key}|${it.value}" }
+
     fun recordOpen(context: Context, pkg: String) {
         val limit = getRecordLimit(context)
         if (limit == RECORD_OFF) return   // 关闭：一个字节都不写
@@ -551,10 +568,18 @@ object NotifyCore {
         val entries = list.split(";").filter { it.isNotEmpty() }.toMutableList()
         entries.add("$pkg|${System.currentTimeMillis()}")
         if (limit > 0) {
-            while (entries.size > limit) entries.removeAt(0)   // 只保留最近 N 条
+            while (entries.size > limit) entries.removeAt(0)   // 只裁剪明细，不动累计次数
         }
         // limit == 0（无限制）：不裁剪
-        prefs.edit().putString(KEY_RECORDS, entries.joinToString(";")).apply()
+
+        // 累计次数单独存：即使明细只留最近 100 条，总次数也不会被洗掉
+        val counts = getOpenCounts(context).toMutableMap()
+        counts[pkg] = (counts[pkg] ?: 0) + 1
+
+        prefs.edit()
+            .putString(KEY_RECORDS, entries.joinToString(";"))
+            .putString(KEY_OPEN_COUNTS, serializeOpenCounts(counts))
+            .apply()
     }
 
     fun getOpenRecords(context: Context): List<Pair<String, Long>> {
@@ -569,9 +594,27 @@ object NotifyCore {
         }.reversed()
     }
 
+    /** 累计打开次数：pkg -> 次数。老版本没有计数时，用现有明细做一次迁移。 */
+    fun getOpenCounts(context: Context): Map<String, Int> {
+        val prefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
+        val stored = parseOpenCounts(prefs.getString(KEY_OPEN_COUNTS, "") ?: "")
+        if (stored.isNotEmpty()) return stored
+
+        // 兼容 1.09 及更早：从最近记录里汇总一次，并落盘
+        val derived = getOpenRecords(context).groupingBy { it.first }.eachCount()
+        if (derived.isNotEmpty()) {
+            prefs.edit()
+                .putString(KEY_OPEN_COUNTS, serializeOpenCounts(derived))
+                .apply()
+        }
+        return derived
+    }
+
     fun clearOpenRecords(context: Context) {
         context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE).edit()
-            .remove(KEY_RECORDS).apply()
+            .remove(KEY_RECORDS)
+            .remove(KEY_OPEN_COUNTS)
+            .apply()
     }
 
     // ---------- 卸载清理 ----------
