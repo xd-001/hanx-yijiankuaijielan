@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch: 
 
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -52,3 +55,18 @@ jobs:
       with:
         name: 快捷通知-完美最终版
         path: app/build/outputs/apk/release/app-release.apk
+
+    - name: Publish APK to Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v1.0.9
+        name: 快捷通知.1.09
+        body: |
+          快捷通知.1.09
+          - 开机自启 + 链式看门狗
+          - 点击反馈 / 打开记录
+          - 翻页 / 四档排序 / 置顶优先
+          - 图标缓存 / 卸载清理 / 配置导入导出
+        files: app/build/outputs/apk/release/app-release.apk
+        make_latest: true
