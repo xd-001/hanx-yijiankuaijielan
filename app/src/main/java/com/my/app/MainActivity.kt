@@ -51,9 +51,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navApps: TextView
     private lateinit var navSettings: TextView
     private var chartRange = 0
+    // 外观令牌：背景档位与强调色各自独立，用户爱怎么搭就怎么搭
+    private lateinit var palette: AppTheme
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        palette = AppTheme.current(this)
+        applySystemBars()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -83,7 +87,7 @@ class MainActivity : AppCompatActivity() {
         pageHost.addView(settingsPage)
         rootScroll.addView(pageHost)
 
-        val rootFrame = FrameLayout(this)
+        val rootFrame = FrameLayout(this).apply { setBackgroundColor(palette.bg) }
         rootFrame.addView(
             rootScroll,
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -109,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         appsPage.addView(TextView(this).apply {
             text = "📱 编辑应用与排序"
             textSize = 20f
-            setTextColor(Color.parseColor("#1F2937"))
+            setTextColor(palette.textPrimary)
             setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(0, 10, 0, 8)
         })
@@ -121,17 +125,17 @@ class MainActivity : AppCompatActivity() {
         val appsPreviewCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(14f), dpToPx(12f), dpToPx(14f), dpToPx(10f))
-            background = roundedBg(Color.WHITE, 16f)
+            background = roundedBg(palette.card, 16f)
         }
         appsPreviewCard.addView(TextView(this).apply {
             text = "通知栏预览（改完立刻可见）"
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
         })
         appsPreviewContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dpToPx(8f), 0, dpToPx(2f))
-            background = roundedBg(Color.parseColor("#F1EFE8"), 10f)
+            background = roundedBg(palette.cardSoft, 10f)
         }
         appsPreviewCard.addView(appsPreviewContainer)
         appsPage.addView(
@@ -140,7 +144,7 @@ class MainActivity : AppCompatActivity() {
                 .apply { topMargin = dpToPx(4f) }
         )
 
-        appsPage.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 24, 0, 10); setTextColor(Color.GRAY) })
+        appsPage.addView(TextView(this).apply { text = "⚙️ 每行显示几个图标？ (4 ~ 10个)"; textSize = 14f; setPadding(0, 24, 0, 10); setTextColor(palette.textSecondary) })
         val seekBar = SeekBar(this).apply {
             max = 6 
             progress = columnsPerRow - 4
@@ -158,8 +162,8 @@ class MainActivity : AppCompatActivity() {
 
         val btnHideApps = Button(this).apply {
             text = "🚫 把不想看到的 App 关进黑名单"
-            setTextColor(Color.parseColor("#666666"))
-            setBackgroundColor(Color.parseColor("#E0E0E0"))
+            setTextColor(palette.textSecondary)
+            setBackgroundColor(palette.track)
             val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             params.setMargins(0, 20, 0, 20)
             layoutParams = params
@@ -174,7 +178,7 @@ class MainActivity : AppCompatActivity() {
         }
         appsPage.addView(btnAdd)
 
-        appsPage.addView(TextView(this).apply { text = "📝 已选队列（置顶 / 上移 / 下移 / 删除）："; textSize = 15f; setPadding(0, 30, 0, 10); setTextColor(Color.GRAY) })
+        appsPage.addView(TextView(this).apply { text = "📝 已选队列（置顶 / 上移 / 下移 / 删除）："; textSize = 15f; setPadding(0, 30, 0, 10); setTextColor(palette.textSecondary) })
 
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
         appsPage.addView(selectedListContainer)
@@ -200,12 +204,12 @@ class MainActivity : AppCompatActivity() {
         if (!::tvStatus.isInitialized) return
         val running = NotifyCore.isNotificationAlive(this)
         tvStatus.text = if (running) "● 运行中" else "● 已停止"
-        tvStatus.setTextColor(Color.parseColor(if (running) "#6C5CE7" else "#FF6B6B"))
+        tvStatus.setTextColor(if (running) palette.accent else palette.dangerText)
         tvStatusSub.text = "${selectedApps.size} 个应用 · 今日打开 ${todayOpenCount()} 次"
         btnPower.text = if (running) "Ⅱ" else "▶"
-        btnPower.setTextColor(Color.parseColor(if (running) "#6C5CE7" else "#FF6B6B"))
+        btnPower.setTextColor(if (running) palette.accent else palette.dangerText)
         btnPower.background = roundedBg(
-            Color.parseColor(if (running) "#EFECFE" else "#FCEBEB"),
+            if (running) palette.accentSoft else palette.dangerBg,
             23f
         )
     }
@@ -228,6 +232,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 状态栏 / 导航栏跟着底色走，深色底下把图标刷亮，否则看不见 */
+    private fun applySystemBars() {
+        window.statusBarColor = palette.bg
+        window.navigationBarColor = palette.bg
+        val lightIcons = !palette.isDark
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.setSystemBarsAppearance(
+                if (lightIcons) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else if (Build.VERSION.SDK_INT >= 23) {
+            @Suppress("DEPRECATION")
+            val flags = window.decorView.systemUiVisibility
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (lightIcons) {
+                flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            } else {
+                flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+            }
+        }
+    }
+
+    /** 给主题色套一个透明度（0~255），用于悬浮底栏这类需要半透的效果 */
+    private fun alphaOf(color: Int, alpha: Int): Int =
+        (color and 0x00FFFFFF) or ((alpha and 0xFF) shl 24)
+
     private fun roundedBg(color: Int, radiusDp: Float, strokeColor: Int? = null): android.graphics.drawable.GradientDrawable =
         android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = dpToPx(radiusDp).toFloat()
@@ -240,7 +270,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
-            background = roundedBg(Color.argb(242, 255, 255, 255), 28f, Color.parseColor("#E5E5EA"))
+            background = roundedBg(alphaOf(palette.card, 242), 28f, palette.divider)
         }
         navMonitor = navItem("监测") { showPage(homePage) }
         navApps = navItem("应用") { showPage(appsPage) }
@@ -255,7 +285,7 @@ class MainActivity : AppCompatActivity() {
         text = label
         textSize = 12f
         gravity = Gravity.CENTER
-        setTextColor(Color.parseColor("#8E8E93"))
+        setTextColor(palette.textSecondary)
         setOnClickListener { onClick() }
     }
 
@@ -269,10 +299,14 @@ class MainActivity : AppCompatActivity() {
         settingsPage.addView(TextView(this).apply {
             text = "设置"
             textSize = 20f
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
             setTypeface(null, android.graphics.Typeface.BOLD)
             setPadding(0, 8, 0, 4)
         })
+
+        settingsGroup("外观")
+        settingsRow("背景", AppTheme.appearanceLabels[palette.appearance]) { showAppearanceDialog() }
+        settingsRow("主题色", AppTheme.accentLabels[palette.accentId]) { showAccentDialog() }
 
         settingsGroup("通知栏")
         settingsRow("排序方式", sortModeLabel()) { showSortModeDialog() }
@@ -294,12 +328,12 @@ class MainActivity : AppCompatActivity() {
         settingsPage.addView(TextView(this).apply {
             text = title
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
             setPadding(dpToPx(4f), dpToPx(16f), 0, dpToPx(6f))
         })
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = roundedBg(Color.WHITE, 16f)
+            background = roundedBg(palette.card, 16f)
             setPadding(dpToPx(14f), dpToPx(2f), dpToPx(14f), dpToPx(2f))
         }
         settingsPage.addView(
@@ -312,7 +346,7 @@ class MainActivity : AppCompatActivity() {
     private fun settingsRow(title: String, value: String, onClick: () -> Unit) {
         val box = settingsGroupBox ?: return
         if (box.childCount > 0) {
-            box.addView(View(this).apply { setBackgroundColor(Color.parseColor("#F2F2F7")) },
+            box.addView(View(this).apply { setBackgroundColor(palette.divider) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
         val row = LinearLayout(this).apply {
@@ -324,20 +358,20 @@ class MainActivity : AppCompatActivity() {
         row.addView(TextView(this).apply {
             text = title
             textSize = 13f
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         if (value.isNotEmpty()) {
             row.addView(TextView(this).apply {
                 text = value
                 textSize = 12f
-                setTextColor(Color.parseColor("#8E8E93"))
+                setTextColor(palette.textSecondary)
                 setPadding(0, 0, dpToPx(8f), 0)
             })
         }
         row.addView(TextView(this).apply {
             text = "›"
             textSize = 15f
-            setTextColor(Color.parseColor("#C7C7CC"))
+            setTextColor(palette.textTertiary)
         })
         box.addView(row)
     }
@@ -440,6 +474,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 背景档位与强调色各自独立：4 × 6 = 24 种组合，随用户搭 */
+    private fun showAppearanceDialog() {
+        showChoiceDialog("背景", AppTheme.appearanceLabels, palette.appearance) { which ->
+            if (which != palette.appearance) {
+                AppTheme.save(this, which, palette.accentId)
+                recreate()   // 颜色全部在 onCreate 里取，重建最省事也最不会漏
+            }
+        }
+    }
+
+    private fun showAccentDialog() {
+        showChoiceDialog("主题色", AppTheme.accentLabels, palette.accentId) { which ->
+            if (which != palette.accentId) {
+                AppTheme.save(this, palette.appearance, which)
+                recreate()
+            }
+        }
+    }
+
     private fun buildHomeDashboard() {
         homePage.removeAllViews()
 
@@ -447,7 +500,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dpToPx(18f), dpToPx(16f), dpToPx(14f), dpToPx(16f))
-            background = roundedBg(Color.WHITE, 20f)
+            background = roundedBg(palette.card, 20f)
         }
         val statusText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         tvStatus = TextView(this).apply {
@@ -458,7 +511,7 @@ class MainActivity : AppCompatActivity() {
         tvStatusSub = TextView(this).apply {
             text = "0 个应用 · 今日打开 0 次"
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
             setPadding(0, 5, 0, 0)
         }
         statusText.addView(tvStatus)
@@ -469,8 +522,8 @@ class MainActivity : AppCompatActivity() {
             text = "▶"
             textSize = 20f
             gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#6C5CE7"))
-            background = roundedBg(Color.parseColor("#EFECFE"), 23f)
+            setTextColor(palette.accent)
+            background = roundedBg(palette.accentSoft, 23f)
             setOnClickListener { toggleService() }
         }
         statusCard.addView(btnPower, LinearLayout.LayoutParams(dpToPx(46f), dpToPx(46f)))
@@ -483,7 +536,7 @@ class MainActivity : AppCompatActivity() {
         val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
-            background = roundedBg(Color.parseColor("#ECECEF"), 18f)
+            background = roundedBg(palette.track, 18f)
         }
         segToday = segmentItem("今日", 0)
         segSeven = segmentItem("7 天", 1)
@@ -502,24 +555,24 @@ class MainActivity : AppCompatActivity() {
         val chartCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(18f), dpToPx(16f), dpToPx(18f), dpToPx(8f))
-            background = roundedBg(Color.WHITE, 20f)
+            background = roundedBg(palette.card, 20f)
         }
         chartCard.addView(TextView(this).apply {
             text = "打开次数"
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
         })
         val numRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
         tvChartNumber = TextView(this).apply {
             text = "0"
             textSize = 24f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
         }
         tvChartDelta = TextView(this).apply {
             text = "较昨日 +0"
             textSize = 11f
-            setTextColor(Color.parseColor("#6C5CE7"))
+            setTextColor(palette.accent)
             setPadding(dpToPx(8f), 0, 0, dpToPx(4f))
         }
         numRow.addView(tvChartNumber)
@@ -527,6 +580,7 @@ class MainActivity : AppCompatActivity() {
         chartCard.addView(numRow)
         chartView = UsageChartView(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(100f))
+            setColors(palette.accent, palette.accentSoft, palette.textTertiary)
         }
         chartCard.addView(chartView)
         homePage.addView(
@@ -538,7 +592,7 @@ class MainActivity : AppCompatActivity() {
         val rankCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(18f), dpToPx(14f), dpToPx(18f), dpToPx(8f))
-            background = roundedBg(Color.WHITE, 20f)
+            background = roundedBg(palette.card, 20f)
         }
         val rankHead = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -549,13 +603,13 @@ class MainActivity : AppCompatActivity() {
             text = "按应用查看"
             textSize = 12f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
         }
         rankHead.addView(tvRankTitle, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         rankHead.addView(TextView(this).apply {
             text = "点行看单曲线"
             textSize = 10f
-            setTextColor(Color.parseColor("#C7C7CC"))
+            setTextColor(palette.textTertiary)
         })
         rankCard.addView(rankHead)
         rankContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -569,13 +623,13 @@ class MainActivity : AppCompatActivity() {
         val previewCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(18f), dpToPx(14f), dpToPx(18f), dpToPx(12f))
-            background = roundedBg(Color.WHITE, 20f)
+            background = roundedBg(palette.card, 20f)
             setOnClickListener { showPage(appsPage) }
         }
         previewCard.addView(TextView(this).apply {
             text = "通知栏预览"
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
         })
         previewContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -586,7 +640,7 @@ class MainActivity : AppCompatActivity() {
         previewCard.addView(TextView(this).apply {
             text = "点按进入应用页"
             textSize = 11f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
         })
         homePage.addView(
             previewCard,
@@ -603,7 +657,7 @@ class MainActivity : AppCompatActivity() {
         text = label
         textSize = 12f
         gravity = Gravity.CENTER
-        setTextColor(Color.parseColor("#8E8E93"))
+        setTextColor(palette.textSecondary)
         setOnClickListener {
             chartRange = range
             updateSegments()
@@ -616,8 +670,8 @@ class MainActivity : AppCompatActivity() {
         val items = listOf(segToday to 0, segSeven to 1, segMonth to 2, segAll to 3)
         for ((view, range) in items) {
             val active = chartRange == range
-            view.background = if (active) roundedBg(Color.WHITE, 12f) else null
-            view.setTextColor(Color.parseColor(if (active) "#1C1C1E" else "#8E8E93"))
+            view.background = if (active) roundedBg(palette.card, 12f) else null
+            view.setTextColor(if (active) palette.textPrimary else palette.textSecondary)
             view.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
@@ -633,8 +687,8 @@ class MainActivity : AppCompatActivity() {
         val items = listOf(navMonitor to 0, navApps to 1, navSettings to 2)
         for ((view, index) in items) {
             val on = active == index
-            view.background = if (on) roundedBg(Color.parseColor("#EFECFE"), 24f) else null
-            view.setTextColor(Color.parseColor(if (on) "#6C5CE7" else "#8E8E93"))
+            view.background = if (on) roundedBg(palette.accentSoft, 24f) else null
+            view.setTextColor(if (on) palette.accent else palette.textSecondary)
             view.setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
@@ -742,7 +796,7 @@ class MainActivity : AppCompatActivity() {
             rankContainer.addView(TextView(this).apply {
                 text = "这段还没有记录，点一下通知栏图标就记着了"
                 textSize = 12f
-                setTextColor(Color.parseColor("#C7C7CC"))
+                setTextColor(palette.textTertiary)
                 setPadding(0, dpToPx(12f), 0, dpToPx(10f))
             })
             return
@@ -757,7 +811,7 @@ class MainActivity : AppCompatActivity() {
             rankContainer.addView(TextView(this).apply {
                 text = "另有 ${list.size - shown.size} 个应用有记录"
                 textSize = 11f
-                setTextColor(Color.parseColor("#C7C7CC"))
+                setTextColor(palette.textTertiary)
                 gravity = Gravity.CENTER
                 setPadding(0, dpToPx(8f), 0, dpToPx(2f))
             })
@@ -787,16 +841,16 @@ class MainActivity : AppCompatActivity() {
             textSize = 12f
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
             setPadding(dpToPx(8f), 0, dpToPx(6f), 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         val ratio = (count.toFloat() / max).coerceIn(0.06f, 1f)
         val barWrap = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = roundedBg(Color.parseColor("#F1EFE8"), 2f)
+            background = roundedBg(palette.cardSoft, 2f)
         }
-        barWrap.addView(View(this).apply { setBackgroundColor(Color.parseColor("#6C5CE7")) },
+        barWrap.addView(View(this).apply { setBackgroundColor(palette.accent) },
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, ratio))
         barWrap.addView(View(this),
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f - ratio))
@@ -807,7 +861,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 12f
             setTypeface(null, android.graphics.Typeface.BOLD)
             gravity = Gravity.END
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
         }, LinearLayout.LayoutParams(dpToPx(40f), LinearLayout.LayoutParams.WRAP_CONTENT))
 
         return row
@@ -828,15 +882,16 @@ class MainActivity : AppCompatActivity() {
         box.addView(TextView(this).apply {
             text = "今日 $today 次 · 7 天 $week 次"
             textSize = 13f
-            setTextColor(Color.parseColor("#1C1C1E"))
+            setTextColor(palette.textPrimary)
         })
         box.addView(TextView(this).apply {
             text = "一个月 $month 次 · 累计 $all 次"
             textSize = 13f
-            setTextColor(Color.parseColor("#8E8E93"))
+            setTextColor(palette.textSecondary)
             setPadding(0, dpToPx(4f), 0, dpToPx(10f))
         })
         box.addView(UsageChartView(this).apply {
+            setColors(palette.accent, palette.accentSoft, palette.textTertiary)
             setData(NotifyCore.seriesDaily(this@MainActivity, 14, pkg), "14天前", "今天")
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(100f)
@@ -859,7 +914,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 16f
             gravity = Gravity.CENTER
             setPadding(0, 30, 0, 20)
-            setTextColor(Color.parseColor("#4CAF50"))
+            setTextColor(palette.successText)
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
 
@@ -939,7 +994,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 16f
             gravity = Gravity.CENTER
             setPadding(0, 30, 0, 20)
-            setTextColor(Color.parseColor("#F44336")) 
+            setTextColor(palette.dangerText) 
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
 
@@ -1042,7 +1097,7 @@ class MainActivity : AppCompatActivity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dpToPx(8f).toFloat()
-                    setColor(Color.parseColor("#F3F4F6"))
+                    setColor(palette.cardSoft)
                 }
                 clipToOutline = true
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
@@ -1068,19 +1123,19 @@ class MainActivity : AppCompatActivity() {
                 text = (app?.loadLabel(pm) ?: "未知").let { if (isPinned) "📌 $it" else it }
                 textSize = 16f
                 setPadding(30, 0, 0, 0)
-                setTextColor(if (isPinned) Color.parseColor("#E65100") else Color.parseColor("#333333"))
+                setTextColor(if (isPinned) palette.accent else palette.textSecondary)
                 layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
             })
             row.addView(TextView(this).apply {
                 text = "${openCounts[selectedApps[i]] ?: 0} 次"
                 textSize = 12f
-                setTextColor(Color.parseColor("#6B7280"))
+                setTextColor(palette.textSecondary)
                 setPadding(8, 0, 8, 0)
             })
             // 【新增】置顶开关：切 pinned_apps，不改手动队列；若当前不是置顶档则自动切过去
             row.addView(Button(this).apply {
                 text = if (isPinned) "📌" else "☆"
-                setTextColor(if (isPinned) Color.parseColor("#E65100") else Color.GRAY)
+                setTextColor(if (isPinned) palette.accent else palette.textSecondary)
                 layoutParams = LinearLayout.LayoutParams(120, -2)
                 setOnClickListener { togglePin(i) }
             })
@@ -1205,7 +1260,7 @@ class MainActivity : AppCompatActivity() {
             addView(TextView(this@MainActivity).apply {
                 text = "记录上限（选「关闭」时不保存任何打开信息）"
                 textSize = 14f
-                setTextColor(Color.GRAY)
+                setTextColor(palette.textSecondary)
             })
             addView(spinner)
             addView(scroll)

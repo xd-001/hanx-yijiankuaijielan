@@ -39,6 +39,15 @@ class UsageChartView(context: Context) : View(context) {
 
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 
+    /** 跟随外观令牌：折线/圆点用强调色，面积用强调浅底，时间标签用三级文字 */
+    fun setColors(accent: Int, soft: Int, label: Int) {
+        linePaint.color = accent
+        dotPaint.color = accent
+        fillPaint.color = soft
+        labelPaint.color = label
+        invalidate()
+    }
+
     fun setData(data: List<Int>, left: String, right: String) {
         values = data
         leftLabel = left
@@ -82,11 +91,14 @@ class UsageChartView(context: Context) : View(context) {
         canvas.drawPath(area, fillPaint)
         canvas.drawPath(path, linePaint)
 
-        for (i in values.indices) {
-            if (values[i] <= 0) continue
-            val x = left + step * i
-            val y = bottom - (values[i].toFloat() / maxValue) * (bottom - top)
-            canvas.drawCircle(x, y, dp(2.4f), dotPaint)
+        // 点太多（比如 30 天）就不画圆点了，否则挤成一条实线
+        if (values.size <= 20) {
+            for (i in values.indices) {
+                if (values[i] <= 0) continue
+                val x = left + step * i
+                val y = bottom - (values[i].toFloat() / maxValue) * (bottom - top)
+                canvas.drawCircle(x, y, dp(2.4f), dotPaint)
+            }
         }
 
         labelPaint.textAlign = Paint.Align.LEFT
