@@ -57,6 +57,12 @@ object NotifyCore {
     private const val KEY_OPEN_COUNTS = "open_counts"
     private const val KEY_RECORD_LIMIT = "record_limit"
 
+    // 按天 / 按小时聚合：明细会被上限裁剪，长周期统计必须靠这两份独立计数
+    // 格式：pkg|yyyyMMdd|次数 ; pkg|yyyyMMddHH|次数
+    private const val KEY_DAILY_COUNTS = "daily_counts"
+    private const val KEY_HOURLY_COUNTS = "hourly_counts"
+    private const val HOURLY_KEEP_HOURS = 48
+
     // 记录上限：-1 = 关闭（完全不写），0 = 无限制，>0 = 具体条数
     // 默认 100，与上一版行为一致，老用户升级后不会被偷偷改成"无限制"
     const val RECORD_OFF = -1
@@ -566,7 +572,8 @@ object NotifyCore {
         val prefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
         val list = prefs.getString(KEY_RECORDS, "") ?: ""
         val entries = list.split(";").filter { it.isNotEmpty() }.toMutableList()
-        entries.add("$pkg|${System.currentTimeMillis()}")
+        val now = System.currentTimeMillis()
+        entries.add("$pkg|$now")
         if (limit > 0) {
             while (entries.size > limit) entries.removeAt(0)   // 只裁剪明细，不动累计次数
         }
@@ -576,9 +583,22 @@ object NotifyCore {
         val counts = getOpenCounts(context).toMutableMap()
         counts[pkg] = (counts[pkg] ?: 0) + 1
 
+        // 按天 + 按小时聚合：长周期（一个月/全部）统计靠它，不受明细上限影响
+        val dk = "$pkg|${dayKey(now)}"
+        val daily = parseBuckets(prefs.getString(KEY_DAILY_COUNTS, "") ?: "")
+        daily[dk] = (daily[dk] ?: 0) + 1
+
+        val hk = "$pkg|${hourKey(now)}"
+        val cutoffHour = hourKey(now - HOURLY_KEEP_HOURS * 3_600_000L)
+        val hourly = parseBuckets(prefs.getString(KEY_HOURLY_COUNTS, "") ?: "")
+            .filterKeys { it.substringAfterLast('|') >= cutoffHour }.toMutableMap()
+        hourly[hk] = (hourly[hk] ?: 0) + 1
+
         prefs.edit()
             .putString(KEY_RECORDS, entries.joinToString(";"))
             .putString(KEY_OPEN_COUNTS, serializeOpenCounts(counts))
+            .putString(KEY_DAILY_COUNTS, serializeBuckets(daily))
+            .putString(KEY_HOURLY_COUNTS, serializeBuckets(hourly))
             .apply()
     }
 
@@ -610,10 +630,141 @@ object NotifyCore {
         return derived
     }
 
+    // ---------- 按天 / 按小时聚合（长周期统计，不受明细上限影响） ----------
+
+    fun dayKey(ms: Long): String {
+        val d = java.time.Instant.ofEpochMilli(ms)
+            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        return "%04d%02d%02d".format(d.year, d.monthValue, d.dayOfMonth)
+    }
+
+    fun hourKey(ms: Long): String {
+        val t = java.time.Instant.ofEpochMilli(ms)
+            .atZone(java.time.ZoneId.systemDefault())
+        return "%04d%02d%02d%02d".format(t.year, t.monthValue, t.dayOfMonth, t.hour)
+    }
+
+    /** 当天 0 点的时间戳 */
+    fun dayStart(ms: Long): Long =
+        java.time.Instant.ofEpochMilli(ms)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalDate()
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant().toEpochMilli()
+
+    private fun parseBuckets(raw: String): MutableMap<String, Int> {
+        val out = mutableMapOf<String, Int>()
+        raw.split(";").filter { it.isNotEmpty() }.forEach { entry ->
+            val p = entry.split("|")
+            if (p.size == 3) {
+                val n = p[2].toIntOrNull()
+                if (n != null && n > 0) out["${p[0]}|${p[1]}"] = n
+            }
+        }
+        return out
+    }
+
+    private fun serializeBuckets(m: Map<String, Int>): String =
+        m.entries.filter { it.value > 0 }.joinToString(";") { "${it.key}|${it.value}" }
+
+    /** 读按天聚合；老版本没有这份数据时，用现有明细尽力迁移一次 */
+    private fun loadDaily(context: Context): MutableMap<String, Int> {
+        val prefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_DAILY_COUNTS, null)
+        if (raw != null) return parseBuckets(raw)
+        val migrated = mutableMapOf<String, Int>()
+        getOpenRecords(context).forEach { (pkg, ts) ->
+            val k = "$pkg|${dayKey(ts)}"
+            migrated[k] = (migrated[k] ?: 0) + 1
+        }
+        prefs.edit().putString(KEY_DAILY_COUNTS, serializeBuckets(migrated)).apply()
+        return migrated
+    }
+
+    private fun loadHourly(context: Context): MutableMap<String, Int> {
+        val prefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_HOURLY_COUNTS, null)
+        if (raw != null) return parseBuckets(raw)
+        val migrated = mutableMapOf<String, Int>()
+        getOpenRecords(context).forEach { (pkg, ts) ->
+            val k = "$pkg|${hourKey(ts)}"
+            migrated[k] = (migrated[k] ?: 0) + 1
+        }
+        prefs.edit().putString(KEY_HOURLY_COUNTS, serializeBuckets(migrated)).apply()
+        return migrated
+    }
+
+    /** 总打开次数。sinceMs <= 0 表示全部时间；pkg == null 表示所有应用 */
+    fun countSince(context: Context, sinceMs: Long, pkg: String? = null): Int {
+        val from = if (sinceMs <= 0L) "" else dayKey(sinceMs)
+        return loadDaily(context).entries.sumOf { (k, v) ->
+            val p = k.split("|")
+            if (p.size == 2 && (pkg == null || p[0] == pkg) && (from.isEmpty() || p[1] >= from)) v else 0
+        }
+    }
+
+    /** 按应用汇总次数，降序。sinceMs <= 0 表示全部时间 */
+    fun countsByPackageSince(context: Context, sinceMs: Long): List<Pair<String, Int>> {
+        val from = if (sinceMs <= 0L) "" else dayKey(sinceMs)
+        val acc = mutableMapOf<String, Int>()
+        loadDaily(context).forEach { (k, v) ->
+            val p = k.split("|")
+            if (p.size == 2 && (from.isEmpty() || p[1] >= from)) {
+                acc[p[0]] = (acc[p[0]] ?: 0) + v
+            }
+        }
+        return acc.entries.filter { it.value > 0 }
+            .sortedByDescending { it.value }
+            .map { it.key to it.value }
+    }
+
+    /** 最近 days 天的每日次数（含今天） */
+    fun seriesDaily(context: Context, days: Int, pkg: String? = null): List<Int> {
+        val map = loadDaily(context)
+        val base = dayStart(System.currentTimeMillis())
+        return (days - 1 downTo 0).map { d ->
+            val key = dayKey(base - d * 86_400_000L)
+            map.entries.sumOf { (k, v) ->
+                val p = k.split("|")
+                if (p.size == 2 && p[1] == key && (pkg == null || p[0] == pkg)) v else 0
+            }
+        }
+    }
+
+    /** 最近 hours 小时的每小时次数（含当前小时） */
+    fun seriesHourly(context: Context, hours: Int, pkg: String? = null): List<Int> {
+        val map = loadHourly(context)
+        val now = System.currentTimeMillis()
+        return (hours - 1 downTo 0).map { h ->
+            val key = hourKey(now - h * 3_600_000L)
+            map.entries.sumOf { (k, v) ->
+                val p = k.split("|")
+                if (p.size == 2 && p[1] == key && (pkg == null || p[0] == pkg)) v else 0
+            }
+        }
+    }
+
+    /** 最近 months 个月的每月次数（含本月） */
+    fun seriesMonthly(context: Context, months: Int, pkg: String? = null): List<Int> {
+        val map = loadDaily(context)
+        val today = java.time.Instant.ofEpochMilli(System.currentTimeMillis())
+            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        return (months - 1 downTo 0).map { m ->
+            val ym = today.minusMonths(m.toLong())
+            val prefix = "%04d%02d".format(ym.year, ym.monthValue)
+            map.entries.sumOf { (k, v) ->
+                val p = k.split("|")
+                if (p.size == 2 && p[1].startsWith(prefix) && (pkg == null || p[0] == pkg)) v else 0
+            }
+        }
+    }
+
     fun clearOpenRecords(context: Context) {
         context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE).edit()
             .remove(KEY_RECORDS)
             .remove(KEY_OPEN_COUNTS)
+            .remove(KEY_DAILY_COUNTS)
+            .remove(KEY_HOURLY_COUNTS)
             .apply()
     }
 
