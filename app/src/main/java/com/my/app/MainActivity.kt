@@ -216,6 +216,13 @@ class MainActivity : AppCompatActivity() {
 
         updateStatus()
         refreshUI()
+
+        // 首次打开（或清数据后重装）先把使用说明摆到眼前，省得用户不知道要去放行自启
+        val firstRunPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+        if (!firstRunPrefs.getBoolean("guide_shown", false)) {
+            firstRunPrefs.edit().putBoolean("guide_shown", true).apply()
+            showPage(guidePage)
+        }
     }
 
     private fun showPage(page: View) {
@@ -1671,7 +1678,7 @@ class MainActivity : AppCompatActivity() {
                 NotifyCore.setRecordLimit(this@MainActivity, value)
                 renderRecords()
                 val msg = when (value) {
-                    NotifyCore.RECORD_OFF -> "已关闭记录，历史已清空"
+                    NotifyCore.RECORD_OFF -> "已关闭记录，历史保留"
                     NotifyCore.RECORD_UNLIMITED -> "上限：无限制（数据会持续增长）"
                     else -> "记录上限：$value 条"
                 }
@@ -1687,9 +1694,17 @@ class MainActivity : AppCompatActivity() {
 
         if (NotifyCore.getRecordLimit(this) != NotifyCore.RECORD_OFF) {
             builder.setNeutralButton("清空记录") { _, _ ->
-                NotifyCore.clearOpenRecords(this)
-                renderRecords()
-                Toast.makeText(this, "记录已清空", Toast.LENGTH_SHORT).show()
+                // 二次确认：这一步不可撤销，不能一点就没
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("清空全部打开记录？")
+                    .setMessage("会清掉所有明细、按天统计和累计次数，清完无法恢复。\n\n只是想停止记录的话，把上面的上限改成「关闭」即可，历史会留着。")
+                    .setPositiveButton("确认清空") { _, _ ->
+                        NotifyCore.clearOpenRecords(this@MainActivity)
+                        renderRecords()
+                        Toast.makeText(this@MainActivity, "记录已清空", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
             }
         }
         builder.show()

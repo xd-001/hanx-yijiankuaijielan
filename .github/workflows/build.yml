@@ -60,8 +60,8 @@ jobs:
       if: github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v1.4.3
-        name: 快捷通知.1.4.3
+        tag_name: v1.4.4
+        name: 快捷通知.1.4.4
         body: |
           快捷通知.1.4
           - 新增「关于」：版本信息、隐私说明、完整更新记录

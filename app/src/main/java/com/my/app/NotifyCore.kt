@@ -546,7 +546,8 @@ object NotifyCore {
     fun setRecordLimit(context: Context, limit: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(KEY_RECORD_LIMIT, limit).apply()
-        if (limit == RECORD_OFF) clearOpenRecords(context)
+        // 注意：这里不再顺手清空历史。「关闭记录」= 停止记录新数据，历史留着；
+        // 真要清空走「清空记录」按钮，那里有二次确认。误删比占内存严重得多。
     }
 
     private fun parseOpenCounts(raw: String): MutableMap<String, Int> {
