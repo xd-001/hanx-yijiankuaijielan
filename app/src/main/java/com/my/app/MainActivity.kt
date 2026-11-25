@@ -667,7 +667,7 @@ class MainActivity : AppCompatActivity() {
         aboutPage.addView(TextView(this).apply {
             text = "不申请 INTERNET 权限，不读取通知内容；打开记录只存包名和时间，可随时清空。"
             textSize = 11f
-            setLineSpacing(dpToPx(3f), 1f)
+            setLineSpacing(dpToPx(3f).toFloat(), 1f)
             setTextColor(palette.textSecondary)
             setPadding(dpToPx(12f), dpToPx(10f), dpToPx(12f), dpToPx(10f))
             background = roundedBg(palette.cardSoft, 12f)
@@ -709,7 +709,7 @@ class MainActivity : AppCompatActivity() {
                 block.addView(TextView(this).apply {
                     text = item
                     textSize = 11f
-                    setLineSpacing(dpToPx(3f), 1f)
+                    setLineSpacing(dpToPx(3f).toFloat(), 1f)
                     setTextColor(palette.textSecondary)
                     setPadding(0, dpToPx(3f), 0, 0)
                 })
@@ -741,7 +741,7 @@ class MainActivity : AppCompatActivity() {
         guidePage.addView(TextView(this).apply {
             text = "通知栏想常驻，需要放行这几处。做完一次，以后升级不用重做。"
             textSize = 11f
-            setLineSpacing(dpToPx(3f), 1f)
+            setLineSpacing(dpToPx(3f).toFloat(), 1f)
             setTextColor(palette.textSecondary)
             setPadding(0, dpToPx(5f), 0, dpToPx(14f))
         })
@@ -766,7 +766,7 @@ class MainActivity : AppCompatActivity() {
         guidePage.addView(TextView(this).apply {
             text = "已选队列：要显示在通知栏的那 20 个应用。\n黑名单：挑应用时不想看见的，只影响选择列表，不影响通知栏。"
             textSize = 11f
-            setLineSpacing(dpToPx(4f), 1f)
+            setLineSpacing(dpToPx(4f).toFloat(), 1f)
             setTextColor(palette.textSecondary)
             setPadding(dpToPx(12f), dpToPx(10f), dpToPx(12f), dpToPx(10f))
             background = roundedBg(palette.card, 12f, palette.divider)
@@ -775,7 +775,7 @@ class MainActivity : AppCompatActivity() {
         guidePage.addView(TextView(this).apply {
             text = "掉线了怎么办：回到「监测」点一下右上角按钮，会重新挂上并排好自检。"
             textSize = 11f
-            setLineSpacing(dpToPx(3f), 1f)
+            setLineSpacing(dpToPx(3f).toFloat(), 1f)
             setTextColor(palette.successText)
             setPadding(dpToPx(12f), dpToPx(9f), dpToPx(12f), dpToPx(9f))
             background = roundedBg(palette.successBg, 10f)
@@ -824,7 +824,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(TextView(this).apply {
             text = desc
             textSize = 11f
-            setLineSpacing(dpToPx(3f), 1f)
+            setLineSpacing(dpToPx(3f).toFloat(), 1f)
             setTextColor(palette.textSecondary)
             setPadding(dpToPx(26f), dpToPx(6f), 0, 0)
         })
