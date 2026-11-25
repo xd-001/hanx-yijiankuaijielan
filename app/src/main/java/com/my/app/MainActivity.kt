@@ -60,6 +60,9 @@ class MainActivity : AppCompatActivity() {
     private val REQ_EXPORT_USAGE = 3001
     private val REQ_IMPORT_USAGE = 3002
 
+    private lateinit var bottomNav: LinearLayout
+    private var navHidden = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         palette = AppTheme.current(this)
@@ -101,7 +104,7 @@ class MainActivity : AppCompatActivity() {
             rootScroll,
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
-        val bottomNav = buildBottomNav()
+        bottomNav = buildBottomNav()
         rootFrame.addView(
             bottomNav,
             FrameLayout.LayoutParams(
@@ -118,6 +121,22 @@ class MainActivity : AppCompatActivity() {
         // 必须放在 setContentView 之后：之前 DecorView 还没建出来，
         // 调 window.insetsController 会 NPE（1.3.0 的崩溃就是这么来的）
         applySystemBars()
+
+        // 往下翻内容时导航自动收起，往上滑回来时再浮出来
+        rootScroll.setOnScrollChangeListener { _, _, y, _, oldY ->
+            if (!::bottomNav.isInitialized) return@setOnScrollChangeListener
+            val dy = y - oldY
+            if (dy > 8 && y > dpToPx(120f) && !navHidden) {
+                navHidden = true
+                bottomNav.animate()
+                    .translationY((bottomNav.height + dpToPx(40f)).toFloat())
+                    .setDuration(180)
+                    .start()
+            } else if (dy < -8 && navHidden) {
+                navHidden = false
+                bottomNav.animate().translationY(0f).setDuration(180).start()
+            }
+        }
 
         buildHomeDashboard()
         buildSettingsPage()
@@ -205,6 +224,12 @@ class MainActivity : AppCompatActivity() {
         if (page === settingsPage) buildSettingsPage()   // 每次进入重建，右侧数值保持最新
         if (page === aboutPage) buildAboutPage()
         if (page === guidePage) buildGuidePage()
+        if (::bottomNav.isInitialized) {
+            // 换页时把导航重新露出来，别让下一页一进来就看不到导航
+            navHidden = false
+            bottomNav.animate().cancel()
+            bottomNav.translationY = 0f
+        }
         rootScroll.scrollTo(0, 0)
         updateNav(page)
         if (page === homePage) {
