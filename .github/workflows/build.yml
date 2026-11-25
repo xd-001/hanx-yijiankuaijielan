@@ -60,13 +60,13 @@ jobs:
       if: github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v1.0.9
-        name: 快捷通知.1.09
+        tag_name: v1.0.10
+        name: 快捷通知.1.10
         body: |
-          快捷通知.1.09
-          - 开机自启 + 链式看门狗
-          - 点击反馈 / 打开记录
-          - 翻页 / 四档排序 / 置顶优先
-          - 图标缓存 / 卸载清理 / 配置导入导出
+          快捷通知.1.10
+          - 修复开机自启：去掉 BootReceiver 里不可靠的 3 秒 postDelayed
+          - 广播内立即拉起前台服务，并加 5 秒一次性 alarm 兜底
+          - 移除点击应用时“打开 XX”的 Toast，仅保留震动反馈
+          - 其余功能与 1.09 一致
         files: app/build/outputs/apk/release/app-release.apk
         make_latest: true

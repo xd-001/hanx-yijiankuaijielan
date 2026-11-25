@@ -17,18 +17,23 @@ import android.content.Intent
  */
 class WatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val app = context.applicationContext
         when (intent.action) {
             NotifyCore.ACTION_WATCHDOG -> {
-                val app = context.applicationContext
                 // 【新增】顺手清理已卸载应用（内部限流每小时一次，开销可忽略）
                 NotifyCore.pruneUninstalledApps(app)
                 NotifyCore.ensureRunning(app)
                 // 链式：每次收到 tick 都重新排下一次（间隔可在设置里改）
                 NotifyCore.scheduleWatchdog(app)
             }
+            NotifyCore.ACTION_BOOT_RETRY -> {
+                // 开机广播里排的一次性兜底：即使启动瞬间进程被杀，这里也会再拉一次
+                NotifyCore.ensureRunning(app)
+                NotifyCore.scheduleWatchdog(app)
+            }
             NotifyCore.ACTION_REFRESH -> {
                 // 配置变更后从 MainActivity 发来，立即重建通知
-                NotifyCore.refreshNotification(context.applicationContext)
+                NotifyCore.refreshNotification(app)
             }
         }
     }

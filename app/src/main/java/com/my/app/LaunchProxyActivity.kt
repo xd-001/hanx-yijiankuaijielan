@@ -13,7 +13,7 @@ import android.widget.Toast
  * 【P1】点击反馈 + 打开记录
  *
  * 透明 Activity：点击通知图标时先走这里，做三件事后立刻 finish：
- * 1. 轻量震动反馈（30ms）
+ * 1. 轻量震动反馈（可调档，不弹 Toast）
  * 2. 记录打开（包名 + 时间戳，仅本地）
  * 3. 启动目标 App
  *
@@ -31,18 +31,11 @@ class LaunchProxyActivity : Activity() {
             return
         }
 
-        // 1. 点击反馈：震动 + Toast（Toast 用应用名，读不到就用包名）
+        // 1. 点击反馈：只保留震动，不再弹“打开 XX”的 Toast
         try {
-            val label = try {
-                packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
-            } catch (e: Exception) {
-                pkg
-            }
-            Toast.makeText(this, "打开 $label", Toast.LENGTH_SHORT).show()
-
             // 震动三档：0=关闭 1=弱(30ms/轻) 2=强(100ms/满幅)，默认弱
             when (NotifyCore.getVibrateMode(this)) {
-                NotifyCore.VIBRATE_OFF -> { /* 关闭：不震动，只留 Toast */ }
+                NotifyCore.VIBRATE_OFF -> { /* 关闭：不震动，也不打扰 */ }
                 NotifyCore.VIBRATE_WEAK -> {
                     val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

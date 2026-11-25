@@ -27,6 +27,7 @@ object NotifyCore {
     const val CHANNEL_ID = "quick_top_v3"
     const val NOTIFICATION_ID = 3
     const val ACTION_WATCHDOG = "com.my.app.WATCHDOG_TICK"
+    const val ACTION_BOOT_RETRY = "com.my.app.BOOT_RETRY"
     const val ACTION_REFRESH = "com.my.app.REFRESH_NOTIFICATION"
     const val ACTION_PAGE_NEXT = "com.my.app.PAGE_NEXT"
 
@@ -66,6 +67,7 @@ object NotifyCore {
     private const val KEY_WATCHDOG_INTERVAL = "watchdog_interval_min"
     private const val WATCHDOG_DEFAULT_MIN = 1
     private const val ALARM_REQUEST_CODE = 1001
+    private const val BOOT_RETRY_REQUEST_CODE = 1002
 
     // 卸载清理：每小时最多扫一次，20 个包的 getLaunchIntentForPackage 开销可忽略
     private const val KEY_LAST_PRUNE = "last_prune_ms"
@@ -484,6 +486,31 @@ object NotifyCore {
                 android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
                 triggerAt, intervalMs, pi
             )
+        }
+    }
+
+    /**
+     * 开机广播的一次性兜底：5 秒后由系统唤醒 WatchdogReceiver 再拉一次服务。
+     * 这个 alarm 注册在 AlarmManager 里，不依赖当前进程存活，专门对付
+     * “onReceive 返回后进程被 ROM 立刻回收”的情况。
+     */
+    fun scheduleBootRetry(context: Context, delayMs: Long = 5_000L) {
+        if (isStoppedByUser(context)) return
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val pi = PendingIntent.getBroadcast(
+            context, BOOT_RETRY_REQUEST_CODE,
+            Intent(context, WatchdogReceiver::class.java).setAction(ACTION_BOOT_RETRY),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val triggerAt = SystemClock.elapsedRealtime() + delayMs
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarm.setExactAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            } else {
+                alarm.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            }
+        } catch (e: Exception) {
+            alarm.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
         }
     }
 
