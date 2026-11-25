@@ -20,8 +20,9 @@ android {
         applicationId "com.my.app"
         minSdk 26
         targetSdk 30 
-        versionCode 5 
-        versionName "1.0.4"
+        // 必须 > 手机上已装的 14，否则覆盖安装会被系统拒绝
+        versionCode 19
+        versionName "1.0.9"
         resConfigs "zh"
     }
 

@@ -32,6 +32,7 @@
         <ImageView android:id="@+id/icon16" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="6dp" android:layout_marginHorizontal="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
         <ImageView android:id="@+id/icon17" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="6dp" android:layout_marginHorizontal="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
         <ImageView android:id="@+id/icon18" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="6dp" android:layout_marginHorizontal="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
+        <!-- 最后一格：普通模式显示第20个 App；翻页模式改为页码键（画 bitmap） -->
         <ImageView android:id="@+id/icon19" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:padding="6dp" android:layout_marginHorizontal="2dp" android:background="?android:attr/selectableItemBackground" android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>
