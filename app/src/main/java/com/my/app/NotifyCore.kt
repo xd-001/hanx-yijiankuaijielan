@@ -768,6 +768,144 @@ object NotifyCore {
             .apply()
     }
 
+    // ---------- 使用记录导出 / 导入（纯本地，走系统文件选择器，零权限） ----------
+
+    private const val USAGE_HEADER = "# QuickNotify-Usage-v1"
+    private const val USAGE_MAX_CHARS = 5_000_000
+    private const val USAGE_MAX_RECORDS = 200_000
+
+    /** 导出使用记录：days > 0 只导最近 N 天；days <= 0 导出全部 */
+    fun exportUsageText(context: Context, days: Int): String {
+        val logPrefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
+        val daily = parseBuckets(logPrefs.getString(KEY_DAILY_COUNTS, "") ?: "")
+        val hourly = parseBuckets(logPrefs.getString(KEY_HOURLY_COUNTS, "") ?: "")
+        val counts = parseOpenCounts(logPrefs.getString(KEY_OPEN_COUNTS, "") ?: "")
+
+        val now = System.currentTimeMillis()
+        val cutoffMs = if (days > 0) dayStart(now) - (days - 1) * 86_400_000L else 0L
+        val cutoffDay = if (days > 0) dayKey(cutoffMs) else ""
+
+        val sb = StringBuilder()
+        sb.append(USAGE_HEADER).append('\n')
+        sb.append("# exported=").append(now).append('\n')
+        sb.append("# range=").append(if (days > 0) "${days}d" else "all").append('\n')
+
+        sb.append("COUNT\n")
+        counts.forEach { (pkg, n) -> if (n > 0) sb.append(pkg).append('|').append(n).append('\n') }
+
+        sb.append("DAILY\n")
+        daily.forEach { (k, v) ->
+            val p = k.split("|")
+            if (p.size == 2 && (cutoffDay.isEmpty() || p[1] >= cutoffDay)) {
+                sb.append(p[0]).append('|').append(p[1]).append('|').append(v).append('\n')
+            }
+        }
+
+        sb.append("HOURLY\n")
+        hourly.forEach { (k, v) ->
+            val p = k.split("|")
+            if (p.size == 2) sb.append(p[0]).append('|').append(p[1]).append('|').append(v).append('\n')
+        }
+
+        sb.append("RECORD\n")
+        getOpenRecords(context).asReversed().forEach { (pkg, ts) ->
+            if (cutoffMs <= 0L || ts >= cutoffMs) sb.append(pkg).append('|').append(ts).append('\n')
+        }
+        return sb.toString()
+    }
+
+    /**
+     * 导入使用记录。默认合并：同 key 取较大值（导两次不会翻倍），明细按「包名+时间戳」去重。
+     * 累计次数用 DAILY 重算，而不是取 max —— 两台设备各自累计值取 max 会漏掉另一台。
+     */
+    fun importUsageText(context: Context, text: String, merge: Boolean): ImportResult {
+        if (text.length > USAGE_MAX_CHARS) return ImportResult(false, "文件过大（超过 5MB），已拒绝")
+        if (!text.lineSequence().any { it.trim() == USAGE_HEADER }) {
+            return ImportResult(false, "这不是快捷通知的使用记录文件")
+        }
+
+        val inDaily = mutableMapOf<String, Int>()
+        val inHourly = mutableMapOf<String, Int>()
+        val inCounts = mutableMapOf<String, Int>()
+        val inRecords = mutableListOf<String>()
+        val pkgRe = Regex("^[A-Za-z0-9_.]+$")
+        val now = System.currentTimeMillis()
+        var section = ""
+
+        for (raw in text.lineSequence()) {
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#")) continue
+            if (line == "COUNT" || line == "DAILY" || line == "HOURLY" || line == "RECORD") {
+                section = line
+                continue
+            }
+            val p = line.split("|")
+            when (section) {
+                "COUNT" -> if (p.size == 2 && pkgRe.matches(p[0])) {
+                    val n = p[1].toIntOrNull()
+                    if (n != null && n > 0) inCounts[p[0]] = maxOf(inCounts[p[0]] ?: 0, n)
+                }
+                "DAILY" -> if (p.size == 3 && pkgRe.matches(p[0]) && p[1].length == 8 && p[1].all { it.isDigit() }) {
+                    val n = p[2].toIntOrNull()
+                    if (n != null && n > 0) {
+                        val k = "${p[0]}|${p[1]}"
+                        inDaily[k] = maxOf(inDaily[k] ?: 0, n)
+                    }
+                }
+                "HOURLY" -> if (p.size == 3 && pkgRe.matches(p[0]) && p[1].length == 10 && p[1].all { it.isDigit() }) {
+                    val n = p[2].toIntOrNull()
+                    if (n != null && n > 0) {
+                        val k = "${p[0]}|${p[1]}"
+                        inHourly[k] = maxOf(inHourly[k] ?: 0, n)
+                    }
+                }
+                "RECORD" -> if (p.size == 2 && pkgRe.matches(p[0])) {
+                    val ts = p[1].toLongOrNull()
+                    if (ts != null && ts > 0L && ts <= now + 86_400_000L) inRecords.add("${p[0]}|$ts")
+                }
+            }
+        }
+
+        if (inDaily.isEmpty() && inCounts.isEmpty() && inRecords.isEmpty()) {
+            return ImportResult(false, "文件里没有可用的记录")
+        }
+        if (inRecords.size > USAGE_MAX_RECORDS) return ImportResult(false, "明细超过 20 万条，已拒绝")
+
+        val logPrefs = context.getSharedPreferences(PREFS_LOG, Context.MODE_PRIVATE)
+        if (!merge) logPrefs.edit().clear().apply()
+
+        val daily = if (merge) parseBuckets(logPrefs.getString(KEY_DAILY_COUNTS, "") ?: "") else mutableMapOf()
+        inDaily.forEach { (k, v) -> daily[k] = maxOf(daily[k] ?: 0, v) }
+
+        val hourly = if (merge) parseBuckets(logPrefs.getString(KEY_HOURLY_COUNTS, "") ?: "") else mutableMapOf()
+        inHourly.forEach { (k, v) -> hourly[k] = maxOf(hourly[k] ?: 0, v) }
+
+        val mergedRecords = LinkedHashSet<String>()
+        if (merge) getOpenRecords(context).forEach { mergedRecords.add("${it.first}|${it.second}") }
+        mergedRecords.addAll(inRecords)
+        val limit = getRecordLimit(context)
+        val all = mergedRecords.toList()
+        val kept = if (limit > 0) all.takeLast(limit) else all
+
+        // 累计次数以按天数据为准重算；只导了 COUNT 的文件才退回文件里的值
+        val recomputed = mutableMapOf<String, Int>()
+        daily.forEach { (k, v) ->
+            val pkg = k.substringBefore('|')
+            recomputed[pkg] = (recomputed[pkg] ?: 0) + v
+        }
+        val finalCounts = if (recomputed.isNotEmpty()) recomputed else inCounts
+
+        logPrefs.edit()
+            .putString(KEY_DAILY_COUNTS, serializeBuckets(daily))
+            .putString(KEY_HOURLY_COUNTS, serializeBuckets(hourly))
+            .putString(KEY_OPEN_COUNTS, serializeOpenCounts(finalCounts))
+            .putString(KEY_RECORDS, kept.joinToString(";"))
+            .apply()
+
+        val dayCount = daily.keys.map { it.substringAfter('|') }.toSet().size
+        return ImportResult(true, "已导入 $dayCount 天记录、${inRecords.size} 条明细")
+    }
+
     // ---------- 卸载清理 ----------
 
     /**

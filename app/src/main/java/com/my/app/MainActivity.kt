@@ -2,6 +2,7 @@ package com.my.app
 
 import android.Manifest
 import android.app.*
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -35,6 +36,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var homePage: LinearLayout
     private lateinit var appsPage: LinearLayout
     private lateinit var settingsPage: LinearLayout
+    private lateinit var aboutPage: LinearLayout
+    private lateinit var guidePage: LinearLayout
     private lateinit var tvStatus: TextView
     private lateinit var tvStatusSub: TextView
     private lateinit var btnPower: TextView
@@ -53,6 +56,9 @@ class MainActivity : AppCompatActivity() {
     private var chartRange = 0
     // 外观令牌：背景档位与强调色各自独立，用户爱怎么搭就怎么搭
     private lateinit var palette: AppTheme
+
+    private val REQ_EXPORT_USAGE = 3001
+    private val REQ_IMPORT_USAGE = 3002
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,9 +87,13 @@ class MainActivity : AppCompatActivity() {
         homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110) }
         appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
+        aboutPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
+        guidePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         pageHost.addView(homePage)
         pageHost.addView(appsPage)
         pageHost.addView(settingsPage)
+        pageHost.addView(aboutPage)
+        pageHost.addView(guidePage)
         rootScroll.addView(pageHost)
 
         val rootFrame = FrameLayout(this).apply { setBackgroundColor(palette.bg) }
@@ -190,10 +200,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPage(page: View) {
-        homePage.visibility = if (page === homePage) View.VISIBLE else View.GONE
-        appsPage.visibility = if (page === appsPage) View.VISIBLE else View.GONE
-        settingsPage.visibility = if (page === settingsPage) View.VISIBLE else View.GONE
+        val pages = listOf(homePage, appsPage, settingsPage, aboutPage, guidePage)
+        for (p in pages) p.visibility = if (p === page) View.VISIBLE else View.GONE
         if (page === settingsPage) buildSettingsPage()   // 每次进入重建，右侧数值保持最新
+        if (page === aboutPage) buildAboutPage()
+        if (page === guidePage) buildGuidePage()
         rootScroll.scrollTo(0, 0)
         updateNav(page)
         if (page === homePage) {
@@ -228,6 +239,8 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
+            ::aboutPage.isInitialized && aboutPage.visibility == View.VISIBLE -> showPage(settingsPage)
+            ::guidePage.isInitialized && guidePage.visibility == View.VISIBLE -> showPage(settingsPage)
             ::appsPage.isInitialized && appsPage.visibility == View.VISIBLE -> showPage(settingsPage)
             ::settingsPage.isInitialized && settingsPage.visibility == View.VISIBLE -> showPage(homePage)
             else -> super.onBackPressed()
@@ -325,9 +338,27 @@ class MainActivity : AppCompatActivity() {
 
         settingsGroup("数据")
         settingsRow("打开记录", recordLimitLabel()) { showOpenRecordsDialog() }
+        settingsRow("导出使用记录", usageSummary()) { showExportUsageDialog() }
+        settingsRow("导入使用记录", "合并或覆盖") { startImportUsage() }
         settingsRow("导出配置", "文件 + 剪贴板") { exportConfig() }
         settingsRow("导入配置", "选文件或粘贴") { showImportDialog() }
         settingsRow("清理已卸载应用", "") { pruneNow() }
+
+        settingsGroup("其他")
+        settingsRow("使用说明", "自启 / 锁任务 / 白名单") { showPage(guidePage) }
+        settingsRow("关于", "v${appVersion()} · 更新记录") { showPage(aboutPage) }
+    }
+
+    private fun usageSummary(): String {
+        val total = NotifyCore.countSince(this, 0L)
+        val apps = NotifyCore.countsByPackageSince(this, 0L).size
+        return "$total 次 · $apps 个应用"
+    }
+
+    private fun appVersion(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+    } catch (e: Exception) {
+        ""
     }
 
     private fun settingsGroup(title: String) {
@@ -496,6 +527,338 @@ class MainActivity : AppCompatActivity() {
                 AppTheme.save(this, palette.appearance, which)
                 recreate()
             }
+        }
+    }
+
+    // ---------- 使用记录导出 / 导入（系统文件选择器，零权限零 root） ----------
+
+    private var pendingExportText: String? = null
+
+    private fun showExportUsageDialog() {
+        val labels = arrayOf("最近 7 天", "最近 30 天（推荐）", "全部记录")
+        val days = intArrayOf(7, 30, 0)
+        showChoiceDialog("导出使用记录", labels, 1) { which ->
+            pendingExportText = NotifyCore.exportUsageText(this, days[which])
+            val name = "快捷通知-使用记录-${NotifyCore.dayKey(System.currentTimeMillis())}.txt"
+            try {
+                startActivityForResult(
+                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TITLE, name)
+                    },
+                    REQ_EXPORT_USAGE
+                )
+            } catch (e: Exception) {
+                pendingExportText = null
+                Toast.makeText(this, "没找到可用的文件管理器", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun startImportUsage() {
+        try {
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/plain"
+                },
+                REQ_IMPORT_USAGE
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, "没找到可用的文件管理器", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+
+        when (requestCode) {
+            REQ_EXPORT_USAGE -> {
+                val text = pendingExportText
+                pendingExportText = null
+                if (text == null) return
+                try {
+                    contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                    Toast.makeText(this, "已导出，可在这里改名或转发", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "写入失败：${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            REQ_IMPORT_USAGE -> {
+                val text = try {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                } catch (e: Exception) {
+                    null
+                }
+                if (text.isNullOrEmpty()) {
+                    Toast.makeText(this, "读取失败，或文件是空的", Toast.LENGTH_LONG).show()
+                    return
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("导入使用记录")
+                    .setMessage("合并：同一天取较大值，明细按时间戳去重，导两次不会翻倍。\n覆盖：先清空现有记录再写入。")
+                    .setPositiveButton("合并") { _, _ -> doImportUsage(text, true) }
+                    .setNegativeButton("覆盖") { _, _ -> doImportUsage(text, false) }
+                    .setNeutralButton("取消", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun doImportUsage(text: String, merge: Boolean) {
+        val result = NotifyCore.importUsageText(this, text, merge)
+        Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+        if (result.ok) {
+            NotifyCore.scheduleRefresh(this)   // 排序若为「按频率」，记录一变顺序就该跟着变
+            buildSettingsPage()
+            updateDashboard()
+        }
+    }
+
+    // ---------- 关于页 ----------
+
+    private fun pageBack(label: String, onClick: () -> Unit): TextView = TextView(this).apply {
+        text = "‹ $label"
+        textSize = 13f
+        setTextColor(palette.accent)
+        setPadding(0, dpToPx(4f), 0, dpToPx(14f))
+        setOnClickListener { onClick() }
+    }
+
+    private fun buildAboutPage() {
+        aboutPage.removeAllViews()
+        aboutPage.addView(pageBack("设置") { showPage(settingsPage) })
+
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dpToPx(14f))
+        }
+        head.addView(ImageView(this).apply {
+            try {
+                setImageDrawable(packageManager.getApplicationIcon(packageName))
+            } catch (e: Exception) {
+                // 图标读不到就不显示，不影响其它内容
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }, LinearLayout.LayoutParams(dpToPx(44f), dpToPx(44f)))
+
+        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        info.addView(TextView(this).apply {
+            text = AppInfo.APP_NAME
+            textSize = 15f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(palette.textPrimary)
+        })
+        info.addView(TextView(this).apply {
+            text = "v${appVersion()} · 本地运行，无网络权限"
+            textSize = 11f
+            setTextColor(palette.textSecondary)
+            setPadding(0, dpToPx(3f), 0, 0)
+        })
+        head.addView(info, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            leftMargin = dpToPx(12f)
+        })
+        aboutPage.addView(head)
+
+        aboutPage.addView(TextView(this).apply {
+            text = "不申请 INTERNET 权限，不读取通知内容；打开记录只存包名和时间，可随时清空。"
+            textSize = 11f
+            setLineSpacing(dpToPx(3f), 1f)
+            setTextColor(palette.textSecondary)
+            setPadding(dpToPx(12f), dpToPx(10f), dpToPx(12f), dpToPx(10f))
+            background = roundedBg(palette.cardSoft, 12f)
+        })
+
+        aboutPage.addView(TextView(this).apply {
+            text = "更新记录"
+            textSize = 12f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(palette.textPrimary)
+            setPadding(0, dpToPx(20f), 0, dpToPx(8f))
+        })
+
+        for (entry in AppInfo.changelog) {
+            val block = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(12f), dpToPx(8f), 0, dpToPx(8f))
+            }
+            val titleRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            titleRow.addView(TextView(this).apply {
+                text = entry.version
+                textSize = 12f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(palette.textPrimary)
+            })
+            titleRow.addView(TextView(this).apply {
+                text = entry.date
+                textSize = 10f
+                setTextColor(palette.textTertiary)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                leftMargin = dpToPx(8f)
+            })
+            block.addView(titleRow)
+
+            for (item in entry.items) {
+                block.addView(TextView(this).apply {
+                    text = item
+                    textSize = 11f
+                    setLineSpacing(dpToPx(3f), 1f)
+                    setTextColor(palette.textSecondary)
+                    setPadding(0, dpToPx(3f), 0, 0)
+                })
+            }
+            aboutPage.addView(block)
+        }
+
+        aboutPage.addView(TextView(this).apply {
+            text = "所有数据只在这台手机里"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(palette.textTertiary)
+            setPadding(0, dpToPx(18f), 0, 0)
+        })
+    }
+
+    // ---------- 使用说明页 ----------
+
+    private fun buildGuidePage() {
+        guidePage.removeAllViews()
+        guidePage.addView(pageBack("设置") { showPage(settingsPage) })
+
+        guidePage.addView(TextView(this).apply {
+            text = "使用说明"
+            textSize = 15f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(palette.textPrimary)
+        })
+        guidePage.addView(TextView(this).apply {
+            text = "通知栏想常驻，需要放行这几处。做完一次，以后升级不用重做。"
+            textSize = 11f
+            setLineSpacing(dpToPx(3f), 1f)
+            setTextColor(palette.textSecondary)
+            setPadding(0, dpToPx(5f), 0, dpToPx(14f))
+        })
+
+        guideStep(1, "允许自启动", "设置 → 应用 → 自启动管理，把「快捷通知」打开。不开的话重启手机后通知不会自己回来。") {
+            openStartupSettings()
+        }
+        guideStep(2, "不受电池限制", "把本应用设为「不限制」或加进电池优化白名单。省电策略会在息屏后掐掉后台。") {
+            openBatterySettings()
+        }
+        guideStep(3, "锁定最近任务", "从底部上滑打开最近任务，长按「快捷通知」卡片下拉锁定。之后一键清理也带不走它。", null)
+        guideStep(4, "允许通知", "别把通知设成「静默」或折叠，否则图标会被收进次要通知里。") {
+            openNotificationSettings()
+        }
+
+        guidePage.addView(TextView(this).apply {
+            text = "两个容易混淆的概念"
+            textSize = 11f
+            setTextColor(palette.textTertiary)
+            setPadding(0, dpToPx(16f), 0, dpToPx(6f))
+        })
+        guidePage.addView(TextView(this).apply {
+            text = "已选队列：要显示在通知栏的那 20 个应用。\n黑名单：挑应用时不想看见的，只影响选择列表，不影响通知栏。"
+            textSize = 11f
+            setLineSpacing(dpToPx(4f), 1f)
+            setTextColor(palette.textSecondary)
+            setPadding(dpToPx(12f), dpToPx(10f), dpToPx(12f), dpToPx(10f))
+            background = roundedBg(palette.card, 12f, palette.divider)
+        })
+
+        guidePage.addView(TextView(this).apply {
+            text = "掉线了怎么办：回到「监测」点一下右上角按钮，会重新挂上并排好自检。"
+            textSize = 11f
+            setLineSpacing(dpToPx(3f), 1f)
+            setTextColor(palette.successText)
+            setPadding(dpToPx(12f), dpToPx(9f), dpToPx(12f), dpToPx(9f))
+            background = roundedBg(palette.successBg, 10f)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dpToPx(12f)
+        })
+    }
+
+    private fun guideStep(index: Int, title: String, desc: String, action: (() -> Unit)?) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(12f), dpToPx(11f), dpToPx(12f), dpToPx(11f))
+            background = roundedBg(palette.cardSoft, 12f)
+        }
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        head.addView(TextView(this).apply {
+            text = index.toString()
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(palette.card)
+            background = roundedBg(palette.accent, 9f)
+        }, LinearLayout.LayoutParams(dpToPx(18f), dpToPx(18f)))
+
+        head.addView(TextView(this).apply {
+            text = title
+            textSize = 12f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(palette.textPrimary)
+            setPadding(dpToPx(8f), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        if (action != null) {
+            head.addView(TextView(this).apply {
+                text = "去设置"
+                textSize = 10f
+                setTextColor(palette.accent)
+                setPadding(dpToPx(12f), dpToPx(4f), dpToPx(12f), dpToPx(4f))
+                background = roundedBg(palette.accentSoft, 8f)
+                setOnClickListener { action() }
+            })
+        }
+        card.addView(head)
+        card.addView(TextView(this).apply {
+            text = desc
+            textSize = 11f
+            setLineSpacing(dpToPx(3f), 1f)
+            setTextColor(palette.textSecondary)
+            setPadding(dpToPx(26f), dpToPx(6f), 0, 0)
+        })
+        guidePage.addView(card, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(8f) })
+    }
+
+    private fun openStartupSettings() {
+        try {
+            startActivity(Intent().setComponent(ComponentName(
+                "com.oplus.battery", "com.oplus.startupapp.view.StartupAppListActivity"
+            )))
+        } catch (e: Exception) {
+            Toast.makeText(this, "没找到自启动页，请到 设置 → 应用 → 自启动管理 手动打开", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openBatterySettings() {
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (e: Exception) {
+            Toast.makeText(this, "请到 设置 → 电池 → 应用耗电管理 里设为「不限制」", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openNotificationSettings() {
+        try {
+            startActivity(
+                Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, "请到 设置 → 通知 里允许本应用通知", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -687,7 +1050,7 @@ class MainActivity : AppCompatActivity() {
         val active = when (page) {
             homePage -> 0
             appsPage -> 1
-            settingsPage -> 2
+            settingsPage, aboutPage, guidePage -> 2
             else -> 0
         }
         val items = listOf(navMonitor to 0, navApps to 1, navSettings to 2)
