@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         palette = AppTheme.current(this)
-        applySystemBars()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -106,6 +105,9 @@ class MainActivity : AppCompatActivity() {
             }
         )
         setContentView(rootFrame)
+        // 必须放在 setContentView 之后：之前 DecorView 还没建出来，
+        // 调 window.insetsController 会 NPE（1.3.0 的崩溃就是这么来的）
+        applySystemBars()
 
         buildHomeDashboard()
         buildSettingsPage()
@@ -234,23 +236,27 @@ class MainActivity : AppCompatActivity() {
 
     /** 状态栏 / 导航栏跟着底色走，深色底下把图标刷亮，否则看不见 */
     private fun applySystemBars() {
-        window.statusBarColor = palette.bg
-        window.navigationBarColor = palette.bg
-        val lightIcons = !palette.isDark
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.setSystemBarsAppearance(
-                if (lightIcons) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            )
-        } else if (Build.VERSION.SDK_INT >= 23) {
-            @Suppress("DEPRECATION")
-            val flags = window.decorView.systemUiVisibility
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = if (lightIcons) {
-                flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            } else {
-                flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+        try {
+            window.statusBarColor = palette.bg
+            window.navigationBarColor = palette.bg
+            val lightIcons = !palette.isDark
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.insetsController?.setSystemBarsAppearance(
+                    if (lightIcons) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                )
+            } else if (Build.VERSION.SDK_INT >= 23) {
+                @Suppress("DEPRECATION")
+                val flags = window.decorView.systemUiVisibility
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = if (lightIcons) {
+                    flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                } else {
+                    flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+                }
             }
+        } catch (e: Exception) {
+            // 状态栏只是外观装饰，任何机型差异都不该让应用打不开
         }
     }
 
