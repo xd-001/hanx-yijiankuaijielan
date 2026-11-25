@@ -4,26 +4,64 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    
+
     <!-- 💥 核心修复 1：新增专门对付安卓 14 (API 34) 严格审查的专属权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    
-    <application 
-        android:label="快捷通知" 
+
+    <!-- 【P0 新增】开机自启：没有这个，重启后通知永远回不来 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 【P1 新增】点击反馈：轻量震动，不涉隐私 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:label="快捷通知"
         android:icon="@drawable/app_icon"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-        
+
         <activity android:name=".MainActivity" android:label="快捷通知" android:exported="true" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
+        <!-- 【P1 新增】透明代理 Activity：点击图标时先反馈+记录，再启动目标 App -->
+        <activity
+            android:name=".LaunchProxyActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
+
         <!-- 💥 核心修复 2：加上 foregroundServiceType="dataSync" 骗过系统审查，防止后台被直接绞杀 -->
-        <service android:name=".QuickService" 
-                 android:label=" " 
-                 android:exported="false" 
+        <service android:name=".QuickService"
+                 android:label=" "
+                 android:exported="false"
                  android:foregroundServiceType="dataSync" />
+
+        <!-- 【P0 新增】开机 / 升级 / 解锁 自启 -->
+        <receiver android:name=".BootReceiver" android:enabled="true" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_INITIALIZE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 【P0 新增】看门狗：定时检查通知是否还在，被杀后自愈拉起 -->
+        <receiver android:name=".WatchdogReceiver" android:enabled="true" android:exported="false">
+            <intent-filter>
+                <action android:name="com.my.app.WATCHDOG_TICK" />
+                <action android:name="com.my.app.REFRESH_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 【新增】翻页键：点通知右下角页码切下一页 -->
+        <receiver android:name=".PageReceiver" android:enabled="true" android:exported="false">
+            <intent-filter>
+                <action android:name="com.my.app.PAGE_NEXT" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
