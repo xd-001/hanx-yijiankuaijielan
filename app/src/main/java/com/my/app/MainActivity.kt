@@ -356,6 +356,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Deprecated in Java")
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // 系统深浅色切换会重建 Activity，这里把页面位置带上
+        restorePageIndex = currentPageIndex
+        restoreScrollY = if (::rootScroll.isInitialized) rootScroll.scrollY else 0
+    }
+
     override fun onBackPressed() {
         when {
             ::aboutPage.isInitialized && aboutPage.visibility == View.VISIBLE -> showPage(settingsPage)
@@ -452,6 +459,7 @@ class MainActivity : AppCompatActivity() {
             else -> "完整卡片"
         }) { showStatusStyleDialog() }
         settingsRow("应用图标", AppIcon.labels[AppIcon.current(this)]) { showIconDialog() }
+        settingsRow("跟随系统夜间", if (AppTheme.isFollowingNight(this)) "开" else "关") { toggleFollowNight() }
 
         settingsGroup("通知栏")
         settingsRow("排序方式", sortModeLabel()) { showSortModeDialog() }
@@ -1001,6 +1009,18 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "请到 设置 → 通知 里允许本应用通知", Toast.LENGTH_LONG).show()
         }
+    }
+
+    /** 跟随系统夜间：切换后重建，颜色由 AppTheme.current 按系统状态决定 */
+    private fun toggleFollowNight() {
+        val follow = !AppTheme.isFollowingNight(this)
+        AppTheme.setFollowingNight(this, follow)
+        recreateKeepingPage()
+        Toast.makeText(
+            this,
+            if (follow) "已跟随系统：系统深色时自动用夜间温和" else "已关闭跟随，使用你选的背景",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun showIconDialog() {

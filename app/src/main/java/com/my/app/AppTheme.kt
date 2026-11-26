@@ -50,6 +50,7 @@ data class AppTheme(
         private const val PREFS = "QuickPrefs"
         private const val KEY_APPEARANCE = "appearance_id"
         private const val KEY_ACCENT = "accent_id"
+        private const val KEY_FOLLOW_NIGHT = "follow_system_night"
 
         /** 设置页展示顺序：浅色三档在前，深色两档在后。ID 保持不变，旧设置不会错位 */
         val appearanceOrder = intArrayOf(
@@ -116,8 +117,35 @@ data class AppTheme(
                 .apply()
         }
 
-        fun current(context: Context): AppTheme =
-            build(readAppearance(context), readAccent(context))
+        /** 系统当前是否深色 */
+        fun isSystemDark(context: Context): Boolean {
+            val mode = context.resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK
+            return mode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+
+        fun isFollowingNight(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_FOLLOW_NIGHT, false)
+
+        fun setFollowingNight(context: Context, follow: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_FOLLOW_NIGHT, follow).apply()
+        }
+
+        /**
+         * 跟随系统时：系统深色 → 夜间温和；系统浅色 → 用用户选的浅色档
+         * （用户若选的是夜间档，浅色时段退回白天，避免大白天一片黑）
+         */
+        fun current(context: Context): AppTheme {
+            val accent = readAccent(context)
+            if (!isFollowingNight(context)) return build(readAppearance(context), accent)
+
+            if (isSystemDark(context)) return build(APPEARANCE_DIM, accent)
+            val chosen = readAppearance(context)
+            val light = if (chosen == APPEARANCE_DIM || chosen == APPEARANCE_DARK) APPEARANCE_LIGHT else chosen
+            return build(light, accent)
+        }
 
         fun build(appearance: Int, accentId: Int): AppTheme {
             val dark = appearance == APPEARANCE_DIM || appearance == APPEARANCE_DARK
