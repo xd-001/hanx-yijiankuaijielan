@@ -57,15 +57,31 @@ class MainActivity : AppCompatActivity() {
     // 外观令牌：背景档位与强调色各自独立，用户爱怎么搭就怎么搭
     private lateinit var palette: AppTheme
 
+    private val RANK_COLLAPSED = 6
+
     private val REQ_EXPORT_USAGE = 3001
     private val REQ_IMPORT_USAGE = 3002
 
     private lateinit var bottomNav: LinearLayout
+    private lateinit var statusFloat: FrameLayout
     private var navHidden = false
+
+    // 状态卡：位置（顶部/底部）与形态（卡片/细条/仅按钮）是两个独立开关
+    private val STATUS_TOP = 0
+    private val STATUS_BOTTOM = 1
+    private val STYLE_CARD = 0
+    private val STYLE_STRIP = 1
+    private val STYLE_BUTTON = 2
+    private var statusPosition = STATUS_TOP
+    private var statusStyle = STYLE_CARD
+    private var rankExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         palette = AppTheme.current(this)
+        val uiPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+        statusPosition = uiPrefs.getInt("status_position", STATUS_TOP)
+        statusStyle = uiPrefs.getInt("status_style", STYLE_CARD)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -87,7 +103,8 @@ class MainActivity : AppCompatActivity() {
 
         rootScroll = ScrollView(this)
         val pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110) }
+        val homeBottomPad = if (statusPosition == STATUS_BOTTOM) 196 else 110
+        homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, dpToPx(homeBottomPad.toFloat())) }
         appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         aboutPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
@@ -117,6 +134,20 @@ class MainActivity : AppCompatActivity() {
                 bottomMargin = dpToPx(18f)
             }
         )
+        statusFloat = FrameLayout(this).apply { visibility = View.GONE }
+        rootFrame.addView(
+            statusFloat,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            ).apply {
+                leftMargin = dpToPx(28f)
+                rightMargin = dpToPx(28f)
+                bottomMargin = dpToPx(82f)
+            }
+        )
+
         setContentView(rootFrame)
         // 必须放在 setContentView 之后：之前 DecorView 还没建出来，
         // 调 window.insetsController 会 NPE（1.3.0 的崩溃就是这么来的）
@@ -128,13 +159,17 @@ class MainActivity : AppCompatActivity() {
             val dy = y - oldY
             if (dy > 8 && y > dpToPx(120f) && !navHidden) {
                 navHidden = true
-                bottomNav.animate()
-                    .translationY((bottomNav.height + dpToPx(40f)).toFloat())
-                    .setDuration(180)
-                    .start()
+                val drop = (bottomNav.height + dpToPx(40f)).toFloat()
+                bottomNav.animate().translationY(drop).setDuration(180).start()
+                if (statusFloat.visibility == View.VISIBLE) {
+                    statusFloat.animate().translationY(drop).setDuration(180).start()
+                }
             } else if (dy < -8 && navHidden) {
                 navHidden = false
                 bottomNav.animate().translationY(0f).setDuration(180).start()
+                if (statusFloat.visibility == View.VISIBLE) {
+                    statusFloat.animate().translationY(0f).setDuration(180).start()
+                }
             }
         }
 
@@ -231,11 +266,19 @@ class MainActivity : AppCompatActivity() {
         if (page === settingsPage) buildSettingsPage()   // 每次进入重建，右侧数值保持最新
         if (page === aboutPage) buildAboutPage()
         if (page === guidePage) buildGuidePage()
+        if (::statusFloat.isInitialized) {
+            statusFloat.visibility =
+                if (page === homePage && statusPosition == STATUS_BOTTOM) View.VISIBLE else View.GONE
+        }
         if (::bottomNav.isInitialized) {
             // 换页时把导航重新露出来，别让下一页一进来就看不到导航
             navHidden = false
             bottomNav.animate().cancel()
             bottomNav.translationY = 0f
+            if (::statusFloat.isInitialized) {
+                statusFloat.animate().cancel()
+                statusFloat.translationY = 0f
+            }
         }
         rootScroll.scrollTo(0, 0)
         updateNav(page)
@@ -253,9 +296,14 @@ class MainActivity : AppCompatActivity() {
         tvStatusSub.text = "${selectedApps.size} 个应用 · 今日打开 ${todayOpenCount()} 次"
         btnPower.text = if (running) "Ⅱ" else "▶"
         btnPower.setTextColor(if (running) palette.accent else palette.dangerText)
+        val powerRadius = when (statusStyle) {
+            STYLE_STRIP -> 18f
+            STYLE_BUTTON -> 28f
+            else -> 23f
+        }
         btnPower.background = roundedBg(
             if (running) palette.accentSoft else palette.dangerBg,
-            23f
+            powerRadius
         )
     }
 
@@ -358,6 +406,13 @@ class MainActivity : AppCompatActivity() {
         settingsGroup("外观")
         settingsRow("背景", AppTheme.appearanceLabels[palette.appearance]) { showAppearanceDialog() }
         settingsRow("主题色", AppTheme.accentLabels[palette.accentId]) { showAccentDialog() }
+        settingsRow("状态卡位置", if (statusPosition == STATUS_BOTTOM) "底部" else "顶部") { showStatusPositionDialog() }
+        settingsRow("状态卡形态", when (statusStyle) {
+            STYLE_STRIP -> "细条"
+            STYLE_BUTTON -> "仅按钮"
+            else -> "完整卡片"
+        }) { showStatusStyleDialog() }
+        settingsRow("应用图标", AppIcon.labels[AppIcon.current(this)]) { showIconDialog() }
 
         settingsGroup("通知栏")
         settingsRow("排序方式", sortModeLabel()) { showSortModeDialog() }
@@ -897,45 +952,186 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildHomeDashboard() {
-        homePage.removeAllViews()
-
-        val statusCard = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(18f), dpToPx(16f), dpToPx(14f), dpToPx(16f))
-            background = roundedBg(palette.card, 20f)
+    private fun showIconDialog() {
+        val current = AppIcon.current(this)
+        showChoiceDialog("应用图标", AppIcon.labels, current) { which ->
+            if (which != current) {
+                AppIcon.apply(this, which)
+                Toast.makeText(
+                    this,
+                    "已切换。桌面图标可能延迟两三秒才变；\n若原图标变成空白或被移除，从应用列表重新拖一次即可。",
+                    Toast.LENGTH_LONG
+                ).show()
+                buildSettingsPage()
+            }
         }
-        val statusText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    }
+
+    private fun showStatusPositionDialog() {
+        val labels = arrayOf("顶部", "底部（导航上方）")
+        val ids = intArrayOf(STATUS_TOP, STATUS_BOTTOM)
+        val current = if (statusPosition == STATUS_BOTTOM) 1 else 0
+        showChoiceDialog("状态卡位置", labels, current) { which ->
+            if (ids[which] != statusPosition) {
+                getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+                    .putInt("status_position", ids[which]).apply()
+                recreate()
+            }
+        }
+    }
+
+    private fun showStatusStyleDialog() {
+        showChoiceDialog("状态卡形态", arrayOf("完整卡片", "细条", "仅按钮"), statusStyle) { which ->
+            if (which != statusStyle) {
+                getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+                    .putInt("status_style", which).apply()
+                recreate()
+            }
+        }
+    }
+
+    // ---------- 曲线时间刻度 ----------
+
+    private fun dayLabel(daysAgo: Int): String {
+        if (daysAgo <= 0) return "今天"
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = System.currentTimeMillis() - daysAgo * 86_400_000L
+        return String.format(
+            java.util.Locale.getDefault(), "%02d/%02d",
+            cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    private fun hourLabel(hoursAgo: Int): String {
+        if (hoursAgo <= 0) return "现在"
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.HOUR_OF_DAY, -hoursAgo)
+        return "${cal.get(java.util.Calendar.HOUR_OF_DAY)}时"
+    }
+
+    private fun monthLabel(monthsAgo: Int): String {
+        if (monthsAgo <= 0) return "本月"
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.MONTH, -monthsAgo)
+        return "${cal.get(java.util.Calendar.MONTH) + 1}月"
+    }
+
+    /** 最近 days 天的刻度：首尾 + 三个等分点 */
+    private fun axisLabelsForDays(days: Int): List<String> {
+        val last = (days - 1).coerceAtLeast(1)
+        return listOf(
+            dayLabel(last),
+            dayLabel(last * 3 / 4),
+            dayLabel(last / 2),
+            dayLabel(last / 4),
+            dayLabel(0)
+        )
+    }
+
+    /** 按时间档给刻度：今日按小时、7/30 天按日期、全部按月 */
+    private fun axisLabelsFor(range: Int): List<String> = when (range) {
+        0 -> listOf(hourLabel(11), hourLabel(8), hourLabel(6), hourLabel(3), hourLabel(0))
+        1 -> axisLabelsForDays(7)
+        2 -> axisLabelsForDays(30)
+        else -> listOf(monthLabel(11), monthLabel(8), monthLabel(5), monthLabel(2), monthLabel(0))
+    }
+
+    /** 状态卡三种形态：完整卡片 / 细条 / 仅圆形按钮；位置由调用方决定 */
+    private fun buildStatusView(): View {
         tvStatus = TextView(this).apply {
             text = "● 已停止"
-            textSize = 15f
+            textSize = if (statusStyle == STYLE_STRIP) 12f else 15f
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
         tvStatusSub = TextView(this).apply {
             text = "0 个应用 · 今日打开 0 次"
             textSize = 11f
             setTextColor(palette.textSecondary)
-            setPadding(0, 5, 0, 0)
+            setPadding(0, if (statusStyle == STYLE_STRIP) dpToPx(2f) else dpToPx(5f), 0, 0)
         }
-        statusText.addView(tvStatus)
-        statusText.addView(tvStatusSub)
-        statusCard.addView(statusText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
         btnPower = TextView(this).apply {
             text = "▶"
-            textSize = 20f
             gravity = Gravity.CENTER
             setTextColor(palette.accent)
-            background = roundedBg(palette.accentSoft, 23f)
             setOnClickListener { toggleService() }
         }
-        statusCard.addView(btnPower, LinearLayout.LayoutParams(dpToPx(46f), dpToPx(46f)))
-        homePage.addView(
-            statusCard,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                .apply { bottomMargin = dpToPx(12f) }
-        )
+
+        when (statusStyle) {
+            STYLE_STRIP -> {
+                val strip = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dpToPx(14f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+                    background = roundedBg(palette.card, 26f)
+                }
+                val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                text.addView(tvStatus)
+                text.addView(tvStatusSub)
+                strip.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                btnPower.textSize = 14f
+                btnPower.background = roundedBg(palette.accentSoft, 18f)
+                strip.addView(btnPower, LinearLayout.LayoutParams(dpToPx(36f), dpToPx(36f)))
+                return strip
+            }
+            STYLE_BUTTON -> {
+                val host = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                }
+                // 状态文字保留但不显示，否则 updateStatus() 里的空判会直接返回
+                tvStatus.visibility = View.GONE
+                tvStatusSub.visibility = View.GONE
+                host.addView(tvStatus)
+                host.addView(tvStatusSub)
+                btnPower.textSize = 18f
+                btnPower.background = roundedBg(palette.accent, 28f)
+                btnPower.elevation = dpToPx(4f).toFloat()
+                host.addView(btnPower, LinearLayout.LayoutParams(dpToPx(52f), dpToPx(52f)))
+                return host
+            }
+            else -> {
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dpToPx(18f), dpToPx(16f), dpToPx(14f), dpToPx(16f))
+                    background = roundedBg(palette.card, 20f)
+                }
+                val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                text.addView(tvStatus)
+                text.addView(tvStatusSub)
+                card.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                btnPower.textSize = 20f
+                btnPower.background = roundedBg(palette.accentSoft, 23f)
+                card.addView(btnPower, LinearLayout.LayoutParams(dpToPx(46f), dpToPx(46f)))
+                return card
+            }
+        }
+    }
+
+    private fun buildHomeDashboard() {
+        homePage.removeAllViews()
+
+        // 状态卡交给 buildStatusView 决定形态，位置按配置放到顶部或底部悬浮层
+        val statusView = buildStatusView()
+        if (statusPosition == STATUS_TOP) {
+            homePage.addView(
+                statusView,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dpToPx(12f) }
+            )
+        } else {
+            statusFloat.removeAllViews()
+            statusFloat.addView(
+                statusView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+            statusFloat.visibility = View.VISIBLE
+        }
 
         val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1064,6 +1260,7 @@ class MainActivity : AppCompatActivity() {
         setTextColor(palette.textSecondary)
         setOnClickListener {
             chartRange = range
+            rankExpanded = false
             updateSegments()
             updateDashboard()
         }
@@ -1147,32 +1344,22 @@ class MainActivity : AppCompatActivity() {
 
         val values: List<Int>
         val total: Int
-        val left: String
-        val right: String
         when (chartRange) {
             0 -> {
                 total = NotifyCore.countSince(this, start)
                 values = NotifyCore.seriesHourly(this, 12)
-                left = "12h前"
-                right = "现在"
             }
             1 -> {
                 total = NotifyCore.countSince(this, start - 6 * 86_400_000L)
                 values = NotifyCore.seriesDaily(this, 7)
-                left = "7天前"
-                right = "今天"
             }
             2 -> {
                 total = NotifyCore.countSince(this, start - 29 * 86_400_000L)
                 values = NotifyCore.seriesDaily(this, 30)
-                left = "30天前"
-                right = "今天"
             }
             else -> {
                 total = NotifyCore.countSince(this, 0L)
                 values = NotifyCore.seriesMonthly(this, 12)
-                left = "12个月前"
-                right = "本月"
             }
         }
         tvChartNumber.text = total.toString()
@@ -1186,7 +1373,7 @@ class MainActivity : AppCompatActivity() {
             else -> "累计"
         }
         if (::tvRankTitle.isInitialized) tvRankTitle.text = "按应用查看 · ${rangeLabel()}"
-        chartView.setData(values, left, right)
+        chartView.setData(values, axisLabelsFor(chartRange))
         updateRank()
     }
 
@@ -1207,17 +1394,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         val max = list.first().second.coerceAtLeast(1)
-        val shown = list.take(6)
-        for (item in shown) {
+        val limit = if (rankExpanded) list.size else minOf(RANK_COLLAPSED, list.size)
+        for (item in list.take(limit)) {
             rankContainer.addView(rankRow(item.first, item.second, max))
         }
-        if (list.size > shown.size) {
+        if (list.size > RANK_COLLAPSED) {
             rankContainer.addView(TextView(this).apply {
-                text = "另有 ${list.size - shown.size} 个应用有记录"
+                text = if (rankExpanded) "收起" else "展开全部 ${list.size} 个"
                 textSize = 11f
-                setTextColor(palette.textTertiary)
                 gravity = Gravity.CENTER
-                setPadding(0, dpToPx(8f), 0, dpToPx(2f))
+                setTextColor(palette.accent)
+                setPadding(0, dpToPx(9f), 0, dpToPx(3f))
+                setOnClickListener {
+                    rankExpanded = !rankExpanded
+                    updateRank()
+                }
             })
         }
     }
@@ -1296,7 +1487,7 @@ class MainActivity : AppCompatActivity() {
         })
         box.addView(UsageChartView(this).apply {
             setColors(palette.accent, palette.accentSoft, palette.textTertiary)
-            setData(NotifyCore.seriesDaily(this@MainActivity, 14, pkg), "14天前", "今天")
+            setData(NotifyCore.seriesDaily(this@MainActivity, 14, pkg), axisLabelsForDays(14))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(100f)
         ))

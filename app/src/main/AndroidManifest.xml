@@ -19,12 +19,62 @@
         android:icon="@drawable/app_icon"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <activity android:name=".MainActivity" android:label="快捷通知" android:exported="true" android:excludeFromRecents="true">
+        <!-- 入口改为 activity-alias（见下），Activity 本身不再挂 LAUNCHER 过滤，
+             否则桌面会出现「原图标 + 新图标」两个入口 -->
+        <activity android:name=".MainActivity" android:label="快捷通知" android:exported="true" android:excludeFromRecents="true" />
+
+        <!-- 图标入口：同一时间只启用一个，切图标 = 启用目标 + 禁用其余 -->
+        <activity-alias
+            android:name=".IconDefault"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/app_icon"
+            android:label="快捷通知">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconPurple"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_style_purple"
+            android:label="快捷通知">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconBars"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_style_bars"
+            android:label="快捷通知">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconDots"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_style_dots"
+            android:label="快捷通知">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- 【P1 新增】透明代理 Activity：点击图标时先反馈+记录，再启动目标 App -->
         <activity
