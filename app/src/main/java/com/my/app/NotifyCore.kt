@@ -137,7 +137,9 @@ object NotifyCore {
     // ---------- 通知构建 ----------
 
     private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
-        val size = 80
+        // 64px 是 1MB 传输上限下的安全线：40 个 × 16KB ≈ 640KB
+        // （原来 80px 时 40 个正好 1MB，第 20 个之后全部传输失败，通知上出现空格子）
+        val size = 64
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, size, size)
