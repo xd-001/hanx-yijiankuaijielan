@@ -67,6 +67,12 @@ class MainActivity : AppCompatActivity() {
     private var navHidden = false
 
     // 状态卡：位置（顶部/底部）与形态（卡片/细条/仅按钮）是两个独立开关
+    companion object {
+        // 重建 Activity 时跨实例传递「回到哪一页、滚到哪」
+        private var restorePageIndex = -1
+        private var restoreScrollY = 0
+    }
+
     private val STATUS_TOP = 0
     private val STATUS_BOTTOM = 1
     private val STYLE_CARD = 0
@@ -74,6 +80,9 @@ class MainActivity : AppCompatActivity() {
     private val STYLE_BUTTON = 2
     private var statusPosition = STATUS_TOP
     private var statusStyle = STYLE_CARD
+
+    /** 0 监测 / 1 应用 / 2 设置 / 3 关于 / 4 使用说明 */
+    private var currentPageIndex = 0
     private var rankExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -252,6 +261,22 @@ class MainActivity : AppCompatActivity() {
         updateStatus()
         refreshUI()
 
+        // 若是主题/形态切换引起的重建，回到原来的页面并滚回原位置
+        if (restorePageIndex > 0) {
+            val target = when (restorePageIndex) {
+                1 -> appsPage
+                2 -> settingsPage
+                3 -> aboutPage
+                4 -> guidePage
+                else -> homePage
+            }
+            showPage(target)
+            val y = restoreScrollY
+            rootScroll.post { rootScroll.scrollTo(0, y) }
+            restorePageIndex = -1
+            restoreScrollY = 0
+        }
+
         // 首次打开（或清数据后重装）先把使用说明摆到眼前，省得用户不知道要去放行自启
         val firstRunPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         if (!firstRunPrefs.getBoolean("guide_shown", false)) {
@@ -260,7 +285,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 重建 Activity 后回到原来的页面与滚动位置；不这么做，改个主题就被弹回主页 */
+    private fun recreateKeepingPage() {
+        restorePageIndex = currentPageIndex
+        restoreScrollY = if (::rootScroll.isInitialized) rootScroll.scrollY else 0
+        recreate()
+    }
+
     private fun showPage(page: View) {
+        currentPageIndex = when (page) {
+            appsPage -> 1
+            settingsPage -> 2
+            aboutPage -> 3
+            guidePage -> 4
+            else -> 0
+        }
         val pages = listOf(homePage, appsPage, settingsPage, aboutPage, guidePage)
         for (p in pages) p.visibility = if (p === page) View.VISIBLE else View.GONE
         if (page === settingsPage) buildSettingsPage()   // 每次进入重建，右侧数值保持最新
@@ -606,7 +645,7 @@ class MainActivity : AppCompatActivity() {
             val id = order[which]
             if (id != palette.appearance) {
                 AppTheme.save(this, id, palette.accentId)
-                recreate()   // 颜色全部在 onCreate 里取，重建最省事也最不会漏
+                recreateKeepingPage()   // 颜色在 onCreate 里取，重建最省事；但要留在原页
             }
         }
     }
@@ -615,7 +654,7 @@ class MainActivity : AppCompatActivity() {
         showChoiceDialog("主题色", AppTheme.accentLabels, palette.accentId) { which ->
             if (which != palette.accentId) {
                 AppTheme.save(this, palette.appearance, which)
-                recreate()
+                recreateKeepingPage()
             }
         }
     }
@@ -954,17 +993,57 @@ class MainActivity : AppCompatActivity() {
 
     private fun showIconDialog() {
         val current = AppIcon.current(this)
-        showChoiceDialog("应用图标", AppIcon.labels, current) { which ->
-            if (which != current) {
-                AppIcon.apply(this, which)
-                Toast.makeText(
-                    this,
-                    "已切换。桌面图标可能延迟两三秒才变；\n若原图标变成空白或被移除，从应用列表重新拖一次即可。",
-                    Toast.LENGTH_LONG
-                ).show()
-                buildSettingsPage()
-            }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(10f), dpToPx(6f), dpToPx(10f), dpToPx(6f))
         }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("应用图标")
+            .setView(list)
+            .setNegativeButton("取消", null)
+            .create()
+
+        for (i in AppIcon.labels.indices) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dpToPx(10f), dpToPx(9f), dpToPx(10f), dpToPx(9f))
+                background = if (i == current) roundedBg(palette.accentSoft, 12f) else null
+                setOnClickListener {
+                    dialog.dismiss()
+                    if (i != current) {
+                        AppIcon.apply(this@MainActivity, i)
+                        Toast.makeText(
+                            this@MainActivity,
+                            "已切换。桌面图标可能延迟两三秒才变；若原图标变成空白，从应用列表重新拖一次即可。",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        buildSettingsPage()
+                    }
+                }
+            }
+            row.addView(ImageView(this).apply {
+                setImageResource(AppIcon.previewRes(i))
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }, LinearLayout.LayoutParams(dpToPx(38f), dpToPx(38f)))
+
+            row.addView(TextView(this).apply {
+                text = AppIcon.labels[i]
+                textSize = 13f
+                setTextColor(if (i == current) palette.accent else palette.textPrimary)
+                setPadding(dpToPx(12f), 0, 0, 0)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+            if (i == current) {
+                row.addView(TextView(this).apply {
+                    text = "使用中"
+                    textSize = 10f
+                    setTextColor(palette.accent)
+                })
+            }
+            list.addView(row)
+        }
+        dialog.show()
     }
 
     private fun showStatusPositionDialog() {
@@ -975,7 +1054,7 @@ class MainActivity : AppCompatActivity() {
             if (ids[which] != statusPosition) {
                 getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
                     .putInt("status_position", ids[which]).apply()
-                recreate()
+                recreateKeepingPage()
             }
         }
     }
@@ -985,7 +1064,7 @@ class MainActivity : AppCompatActivity() {
             if (which != statusStyle) {
                 getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
                     .putInt("status_style", which).apply()
-                recreate()
+                recreateKeepingPage()
             }
         }
     }

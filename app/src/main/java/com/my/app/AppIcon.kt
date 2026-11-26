@@ -19,6 +19,14 @@ object AppIcon {
 
     private val aliases = arrayOf(".IconDefault", ".IconPurple", ".IconBars", ".IconDots")
 
+    /** 预览用图标资源，0 是原来那张二次元 JPG */
+    fun previewRes(id: Int): Int = when (id) {
+        1 -> R.mipmap.ic_style_purple
+        2 -> R.mipmap.ic_style_bars
+        3 -> R.mipmap.ic_style_dots
+        else -> R.drawable.app_icon
+    }
+
     private const val PREFS = "QuickPrefs"
     private const val KEY = "icon_id"
 
