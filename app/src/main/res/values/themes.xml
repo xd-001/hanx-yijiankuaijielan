@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      自定义主题只为两件事：
+      1. android:forceDarkAllowed=false —— 系统深色模式会把我们自绘的浅色界面强行反色，
+         护眼绿会变成墨绿、白卡片变深灰，配色全乱。关掉它，颜色由 AppTheme 自己说了算。
+      2. windowLightStatusBar 交给代码动态设置，这里不写死。
+    -->
+    <style name="Theme.QuickNotify" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+    </style>
+</resources>

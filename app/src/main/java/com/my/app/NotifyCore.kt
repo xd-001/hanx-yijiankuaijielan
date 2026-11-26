@@ -45,7 +45,9 @@ object NotifyCore {
     // 翻页方式：0=整页翻（每页19） 1=只翻第二行（第一行10个雷打不动）
     const val PAGE_WHOLE = 0
     const val PAGE_ROW = 1
+    const val PAGE_EXPAND = 2   // 展开全部：最多 4 行 40 格，不翻页
 
+    private const val MAX_EXPAND = 40       // 展开模式最多 4 行
     private const val PAGE_SIZE = 19        // 整页翻：20 格留 1 格给页码键
     private const val ROW_FIRST_COUNT = 10  // 只翻第二行：第一行固定 10 个
     private const val ROW_SECOND_COUNT = 9  // 第二行 9 个 + 页码键占第 20 格
@@ -275,7 +277,12 @@ object NotifyCore {
 
         // 分页结果：(本页显示的包, 总页数, 当前页, 是否显示页码键)
         // 整页翻 = 每页 19 个；只翻第二行 = 第一行固定 10 + 第二行翻 9
-        val view: PageView = if (!paging || pkgs.isEmpty()) {
+        val view: PageView = if (pkgs.isEmpty()) {
+            PageView(emptyList(), 1, 0, false)
+        } else if (paging && getPagingMode(context) == PAGE_EXPAND) {
+            // 展开全部：按列数把 40 个槽位铺满，不翻页
+            PageView(pkgs.take(MAX_EXPAND), 1, 0, false)
+        } else if (!paging) {
             PageView(pkgs.take(20), 1, 0, false)
         } else if (getPagingMode(context) == PAGE_ROW) {
             val head = pkgs.take(ROW_FIRST_COUNT)          // 第一行：定死，始终显示
@@ -322,7 +329,7 @@ object NotifyCore {
             val rowId = context.resources.getIdentifier("row$r", "id", context.packageName)
             if (rowId != 0) remoteViews.setViewVisibility(rowId, android.view.View.GONE)
         }
-        for (i in 0 until 20) {
+        for (i in 0 until MAX_EXPAND) {
             val id = context.resources.getIdentifier("icon$i", "id", context.packageName)
             if (id != 0) remoteViews.setViewVisibility(id, android.view.View.GONE)
         }
@@ -346,7 +353,7 @@ object NotifyCore {
                 val bitmap = appIconBitmap(context, pkg)
                 val resId = context.resources.getIdentifier("icon$i", "id", context.packageName)
                 val rowId = context.resources.getIdentifier("row${i / 10}", "id", context.packageName)
-                if (resId != 0 && rowId != 0 && i / 10 <= 1) {
+                if (resId != 0 && rowId != 0 && i / 10 <= 3) {
                     remoteViews.setViewVisibility(rowId, android.view.View.VISIBLE)
                     remoteViews.setImageViewBitmap(resId, bitmap)
                     remoteViews.setViewVisibility(resId, android.view.View.VISIBLE)
@@ -994,7 +1001,7 @@ object NotifyCore {
                     parsed[key] = when (key) {
                         "columns" -> n.coerceIn(4, 10)
                         "sort_mode" -> n.coerceIn(0, SORT_PINNED)
-                        "paging_mode" -> n.coerceIn(0, 1)
+                        "paging_mode" -> n.coerceIn(0, 2)
                         "vibrate_mode" -> n.coerceIn(0, 2)
                         "current_page" -> n.coerceAtLeast(0)
                         else -> n   // record_limit 允许 -1/0/任意正数

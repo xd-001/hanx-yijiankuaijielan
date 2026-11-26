@@ -17,7 +17,7 @@
     <application
         android:label="快捷通知"
         android:icon="@drawable/app_icon"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        android:theme="@style/Theme.QuickNotify">
 
         <!-- 入口改为 activity-alias（见下），Activity 本身不再挂 LAUNCHER 过滤，
              否则桌面会出现「原图标 + 新图标」两个入口 -->

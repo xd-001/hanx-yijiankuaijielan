@@ -547,6 +547,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun pagingLabel(): String = when {
+        NotifyCore.isPagingEnabled(this) && NotifyCore.getPagingMode(this) == NotifyCore.PAGE_EXPAND -> "展开全部"
         !NotifyCore.isPagingEnabled(this) -> "关闭"
         NotifyCore.getPagingMode(this) == NotifyCore.PAGE_ROW -> "只翻第二行"
         else -> "整页翻"
@@ -596,16 +597,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPagingDialog() {
-        val opts = arrayOf("关闭（20 格全用）", "整页翻（每页 19 个）", "只翻第二行（第一行 10 个不动）")
+        val opts = arrayOf(
+            "关闭（20 格全用）",
+            "整页翻（每页 19 个）",
+            "只翻第二行（第一行 10 个不动）",
+            "展开全部（最多 4 行 40 个）"
+        )
         val cur = when {
             !NotifyCore.isPagingEnabled(this) -> 0
             NotifyCore.getPagingMode(this) == NotifyCore.PAGE_ROW -> 2
+            NotifyCore.getPagingMode(this) == NotifyCore.PAGE_EXPAND -> 3
             else -> 1
         }
         showChoiceDialog("翻页", opts, cur) { which ->
+            val mode = when (which) {
+                2 -> NotifyCore.PAGE_ROW
+                3 -> NotifyCore.PAGE_EXPAND
+                else -> NotifyCore.PAGE_WHOLE
+            }
             getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
                 .putBoolean("paging_enabled", which != 0)
-                .putInt("paging_mode", if (which == 2) NotifyCore.PAGE_ROW else NotifyCore.PAGE_WHOLE)
+                .putInt("paging_mode", mode)
                 .putInt("current_page", 0)
                 .apply()
             NotifyCore.scheduleRefresh(this)
