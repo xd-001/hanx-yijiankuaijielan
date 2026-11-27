@@ -129,7 +129,7 @@ class MainActivity : AppCompatActivity() {
 
         rootScroll = ScrollView(this)
         val pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val homeBottomPad = 118
+        val homeBottomPad = if (statusPosition == STATUS_BOTTOM) 196 else 118
         homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, dpToPx(homeBottomPad.toFloat())) }
         appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
@@ -252,9 +252,15 @@ class MainActivity : AppCompatActivity() {
         }
         appsPage.addView(seekBar)
 
-        appsPage.addView(appsOption("排序方式", sortModeLabel()) { showSortModeDialog() })
-        appsPage.addView(appsOption("翻页", pagingLabel()) { showPagingDialog() })
-        appsPage.addView(appsOption("点击震动", vibrateLabel()) { showVibrateDialog() })
+        val optParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(8f) }
+        appsPage.addView(appsOption("排序方式", sortModeLabel()) { showSortModeDialog() }, optParams)
+        appsPage.addView(appsOption("翻页", pagingLabel()) { showPagingDialog() }, optParams)
+        appsPage.addView(appsOption("点击震动", vibrateLabel()) { showVibrateDialog() }, optParams)
+        appsPage.addView(appsOption("隐藏系统应用", if (hideSystemApps) "开" else "关") { toggleHideSystem() }, optParams)
+        appsPage.addView(appsOption("已添加的位置", arrayOf("保持现状", "置顶", "置底")[addedPosition]) { showAddedPositionDialog() }, optParams)
 
         val btnHideApps = Button(this).apply {
             text = "🚫 把不想看到的 App 关进黑名单"
@@ -498,10 +504,6 @@ class MainActivity : AppCompatActivity() {
 
         settingsGroup("启动页")
         settingsRow("打开时进入", if (startPage == 1) "图标" else "统计") { showStartPageDialog() }
-
-        settingsGroup("应用列表")
-        settingsRow("隐藏系统应用", if (hideSystemApps) "开" else "关") { toggleHideSystem() }
-        settingsRow("已添加的位置", arrayOf("保持现状", "置顶", "置底")[addedPosition]) { showAddedPositionDialog() }
 
         settingsGroup("数据")
         settingsRow("打开记录", recordLimitLabel()) { showOpenRecordsDialog() }
@@ -1450,58 +1452,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private data class QuickTool(val label: String, val uri: String, val pkg: String)
-
-    /** 扫一扫 / 付款码 / 乘车码：走各家深链，失效就退回打开 App 本身 */
-    private fun quickToolsRow(): View {
-        val tools = listOf(
-            QuickTool("微信扫一扫", "weixin://dl/scan", "com.tencent.mm"),
-            QuickTool("支付宝扫一扫", "alipays://platformapi/startapp?appId=10000007", "com.eg.android.AlipayGphone"),
-            QuickTool("付款码", "alipays://platformapi/startapp?appId=20000056", "com.eg.android.AlipayGphone"),
-            QuickTool("乘车码", "alipays://platformapi/startapp?appId=200011235", "com.eg.android.AlipayGphone")
-        )
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = tools.size.toFloat()
-        }
-        for (tool in tools) {
-            row.addView(TextView(this).apply {
-                text = tool.label
-                textSize = 11f
-                gravity = Gravity.CENTER
-                setTextColor(palette.textSecondary)
-                setPadding(0, dpToPx(9f), 0, dpToPx(9f))
-                background = roundedBg(palette.card, 12f)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { rightMargin = dpToPx(6f) }
-                setOnClickListener { openQuickTool(tool) }
-            })
-        }
-        row.setPadding(0, dpToPx(12f), 0, dpToPx(2f))
-        return row
-    }
-
-    private fun openQuickTool(tool: QuickTool) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tool.uri)))
-        } catch (e: Exception) {
-            val launch = packageManager.getLaunchIntentForPackage(tool.pkg)
-            if (launch != null) {
-                startActivity(launch)
-                Toast.makeText(this, "快捷方式失效了，已打开应用首页", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "没装对应的应用", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     private fun buildHomeDashboard() {
         homePage.removeAllViews()
 
         // 先把控件建出来（updateStatus 依赖 tvStatus 等），真正插入放到最后
         val statusView = buildStatusView()
-
-        homePage.addView(quickToolsRow())
 
         val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1617,7 +1572,7 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
 
-        // 状态卡最后插：顶部模式放进第 0 位，底部模式自然落在内容末尾
+        // 状态卡最后处理：顶部放进第 0 位；底部回到悬浮层（用户更喜欢钉在导航上方那种）
         val statusParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -1625,7 +1580,15 @@ class MainActivity : AppCompatActivity() {
         if (statusPosition == STATUS_TOP) {
             homePage.addView(statusView, 0, statusParams)
         } else {
-            homePage.addView(statusView, statusParams)
+            statusFloat.removeAllViews()
+            statusFloat.addView(
+                statusView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+            statusFloat.visibility = View.VISIBLE
         }
 
         updateSegments()

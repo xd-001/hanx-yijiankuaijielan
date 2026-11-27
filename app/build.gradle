@@ -21,8 +21,8 @@ android {
         minSdk 26
         targetSdk 30 
         // 必须大于手机上已安装的版本，否则覆盖安装会被系统拒绝
-        versionCode 39
-        versionName "1.6.2"
+        versionCode 40
+        versionName "1.6.3"
         resConfigs "zh"
     }
 
