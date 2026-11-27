@@ -421,11 +421,23 @@ class MainActivity : AppCompatActivity() {
                 touchDownAt = ev.eventTime
                 swipeConsumed = false
             }
+            MotionEvent.ACTION_MOVE -> {
+                // 滑动过程中就判，不用等抬手 —— 之前等 UP 导致手感发钝
+                if (!swipeConsumed) {
+                    val dx = ev.x - touchDownX
+                    val dy = ev.y - touchDownY
+                    val horizontal = abs(dx) > dpToPx(40f) && abs(dx) > abs(dy) * 1.2f
+                    if (horizontal && trySwipePage(if (dx < 0) 1 else -1)) {
+                        swipeConsumed = true
+                        return true
+                    }
+                }
+            }
             MotionEvent.ACTION_UP -> {
                 if (!swipeConsumed) {
                     val dx = ev.x - touchDownX
                     val dy = ev.y - touchDownY
-                    val horizontal = abs(dx) > dpToPx(56f) && abs(dx) > abs(dy) * 1.5f
+                    val horizontal = abs(dx) > dpToPx(40f) && abs(dx) > abs(dy) * 1.2f
                     if (horizontal && trySwipePage(if (dx < 0) 1 else -1)) {
                         swipeConsumed = true
                         return true   // 吞掉这次抬手，防止穿透成点击
