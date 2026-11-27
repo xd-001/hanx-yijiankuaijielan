@@ -1479,12 +1479,6 @@ class MainActivity : AppCompatActivity() {
         seg.addView(segSeven, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         seg.addView(segMonth, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         seg.addView(segAll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
-        homePage.addView(
-            seg,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36f))
-                .apply { bottomMargin = dpToPx(12f) }
-        )
-
         val chartCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(18f), dpToPx(16f), dpToPx(18f), dpToPx(8f))
@@ -1519,6 +1513,13 @@ class MainActivity : AppCompatActivity() {
         homePage.addView(
             chartCard,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dpToPx(10f) }
+        )
+
+        // 时间档位放在曲线下面：换档时手不用往上够，眼睛也不用往回跳
+        homePage.addView(
+            seg,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36f))
                 .apply { bottomMargin = dpToPx(12f) }
         )
 
