@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_curve_desc">近 7 天打开次数</string>
+    <string name="widget_wide_label">快捷通知 · 横版</string>
+    <string name="widget_tall_label">快捷通知 · 竖版</string>
+</resources>

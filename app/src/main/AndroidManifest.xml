@@ -89,6 +89,21 @@
                  android:exported="false"
                  android:foregroundServiceType="dataSync" />
 
+        <!-- 桌面插件：横版 4x2 / 竖版 2x4，内容与通知栏同源 -->
+        <receiver android:name=".QuickWidgetWideProvider" android:exported="true" android:label="@string/widget_wide_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_wide_info" />
+        </receiver>
+
+        <receiver android:name=".QuickWidgetTallProvider" android:exported="true" android:label="@string/widget_tall_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_tall_info" />
+        </receiver>
+
         <!-- 【P0 新增】开机 / 升级 / 解锁 自启 -->
         <receiver android:name=".BootReceiver" android:enabled="true" android:exported="false">
             <intent-filter>

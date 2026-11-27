@@ -503,6 +503,7 @@ class MainActivity : AppCompatActivity() {
 
         settingsGroup("其他")
         settingsRow("使用说明", "自启 / 锁任务 / 白名单") { showPage(guidePage) }
+        settingsRow("桌面插件", "横版 4×2 / 竖版 2×4") { showWidgetTip() }
         settingsRow("关于", "v${appVersion()} · 更新记录") { showPage(aboutPage) }
     }
 
@@ -656,6 +657,18 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "没有可分享的应用，图片已保存到相册", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showWidgetTip() {
+        AlertDialog.Builder(this)
+            .setTitle("添加桌面插件")
+            .setMessage(
+                "长按桌面空白处 → 小组件 / 插件 → 找到「快捷通知」→ 选横版或竖版拖到桌面。\n\n" +
+                    "横版 4×2 放 16 个图标，竖版 2×4 放 8 个，都比桌面图标一行 4 个密。\n\n" +
+                    "插件内容与通知栏同源：改了列表、换了应用，插件会自动跟着变。"
+            )
+            .setPositiveButton("知道了", null)
+            .show()
     }
 
     private fun usageSummary(): String {
@@ -2307,6 +2320,8 @@ class MainActivity : AppCompatActivity() {
             .apply()
         // 【P1】保存后自动刷新通知（带 400ms 去抖，SeekBar 拖动不会刷爆）
         NotifyCore.scheduleRefresh(this)
+        // 插件内容与通知栏同源，列表一变就跟着换
+        WidgetUpdater.refreshAll(this)
     }
 
     // 【P1】打开记录：上限可调（关闭 / 100 / 1000 / 无限制）+ 查看 + 清空
