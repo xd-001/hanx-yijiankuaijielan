@@ -317,6 +317,9 @@ class MainActivity : AppCompatActivity() {
         // 冷启动按用户选的启动页落脚（重建恢复优先，见上面的 restorePageIndex）
         if (restorePageIndex < 0 && startPage == 1) {
             showPage(appsPage)
+        } else if (currentPageView == null) {
+            // 默认停在统计页时不会走 showPage，这里补上，否则滑动找不到起点
+            currentPageView = homePage
         }
 
         // 首次打开（或清数据后重装）先把使用说明摆到眼前，省得用户不知道要去放行自启

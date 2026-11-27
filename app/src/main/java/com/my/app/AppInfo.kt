@@ -15,7 +15,7 @@ object AppInfo {
 
     val changelog: List<Entry> = listOf(
         Entry(
-            "1.6.8", "2026-11-27", listOf(
+            "1.6.9", "2026-11-27", listOf(
                 "状态卡默认改成细条，不再压住预览底部",
                 "状态卡在统计 / 图标 / 设置三页都能悬浮",
                 "左右滑动可直接切页（只在前三页之间）",
