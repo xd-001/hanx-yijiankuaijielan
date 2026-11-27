@@ -10,9 +10,19 @@
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
 
-    <!-- 深色弹窗：夜间模式下别再用白底晃眼 -->
-    <style name="AppDialogDark" parent="Theme.AppCompat.Dialog">
-        <item name="android:windowBackground">@drawable/dialog_dark_bg</item>
+
+    <!-- 弹窗：深浅两套共用同一套度量（.Alert + 同尺寸 inset），只换颜色，
+         这样白天和晚上弹出的大小完全一致 -->
+    <style name="AppDialogLight" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg</item>
+        <item name="android:textColorPrimary">#1C1C1E</item>
+        <item name="android:textColorSecondary">#6B6B70</item>
+        <item name="colorAccent">#6C5CE7</item>
+        <item name="colorPrimary">#6C5CE7</item>
+    </style>
+
+    <style name="AppDialogDark" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg_dark</item>
         <item name="android:textColorPrimary">#F2F2F5</item>
         <item name="android:textColorSecondary">#A0A0A8</item>
         <item name="colorAccent">#9B8CFF</item>

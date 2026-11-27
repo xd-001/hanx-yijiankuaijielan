@@ -16,8 +16,11 @@ import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import kotlin.math.abs
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -80,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     private val STYLE_STRIP = 1
     private val STYLE_BUTTON = 2
     private var statusPosition = STATUS_TOP
-    private var statusStyle = STYLE_CARD
+    private var statusStyle = STYLE_STRIP
 
     /** 0 监测 / 1 应用 / 2 设置 / 3 关于 / 4 使用说明 */
     private var currentPageIndex = 0
@@ -97,6 +100,9 @@ class MainActivity : AppCompatActivity() {
 
     /** 启动页：0 统计 / 1 图标 */
     private var startPage = 0
+
+    private lateinit var swipeDetector: android.view.GestureDetector
+    private var currentPageView: View? = null
     private var rankExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         palette = AppTheme.current(this)
         val uiPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         statusPosition = uiPrefs.getInt("status_position", STATUS_TOP)
-        statusStyle = uiPrefs.getInt("status_style", STYLE_CARD)
+        statusStyle = uiPrefs.getInt("status_style", STYLE_STRIP)
         hideSystemApps = uiPrefs.getBoolean("hide_system_apps", false)
         addedPosition = uiPrefs.getInt("added_position", 0)
         startPage = uiPrefs.getInt("start_page", 0)
@@ -131,8 +137,9 @@ class MainActivity : AppCompatActivity() {
         val pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val homeBottomPad = if (statusPosition == STATUS_BOTTOM) 196 else 118
         homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, dpToPx(homeBottomPad.toFloat())) }
-        appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
-        settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
+        val pageBottomPad = dpToPx(if (statusPosition == STATUS_BOTTOM) 210f else 110f)
+        appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, pageBottomPad); visibility = View.GONE }
+        settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, pageBottomPad); visibility = View.GONE }
         aboutPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         guidePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         pageHost.addView(homePage)
@@ -308,6 +315,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         newApps = detectNewApps()
+        setupSwipe()
 
         // 冷启动按用户选的启动页落脚（重建恢复优先，见上面的 restorePageIndex）
         if (restorePageIndex < 0 && startPage == 1) {
@@ -337,14 +345,16 @@ class MainActivity : AppCompatActivity() {
             guidePage -> 4
             else -> 0
         }
+        currentPageView = page
         val pages = listOf(homePage, appsPage, settingsPage, aboutPage, guidePage)
         for (p in pages) p.visibility = if (p === page) View.VISIBLE else View.GONE
         if (page === settingsPage) buildSettingsPage()   // 每次进入重建，右侧数值保持最新
         if (page === aboutPage) buildAboutPage()
         if (page === guidePage) buildGuidePage()
         if (::statusFloat.isInitialized) {
+            val mainPages = page === homePage || page === appsPage || page === settingsPage
             statusFloat.visibility =
-                if (page === homePage && statusPosition == STATUS_BOTTOM) View.VISIBLE else View.GONE
+                if (mainPages && statusPosition == STATUS_BOTTOM) View.VISIBLE else View.GONE
         }
         if (::bottomNav.isInitialized) {
             // 换页时把导航重新露出来，别让下一页一进来就看不到导航
@@ -393,6 +403,44 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Deprecated in Java")
+    /** 左右滑切页：只在前三页之间走，关于页/使用说明页不参与（返回键更自然） */
+    private fun setupSwipe() {
+        swipeDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                if (e1 == null) return false
+                val dx = e2.x - e1.x
+                val dy = e2.y - e1.y
+                // 必须是「横向为主」的快速滑动，否则让页面自己滚
+                if (abs(dx) < dpToPx(60f) || abs(dx) < abs(dy) * 1.6f) return false
+
+                val pages = listOf(homePage, appsPage, settingsPage)
+                val idx = pages.indexOfFirst { it === currentPageView }
+                if (idx < 0) return false
+
+                return if (dx < 0) {
+                    if (idx < pages.size - 1) {
+                        showPage(pages[idx + 1])
+                        true
+                    } else false
+                } else {
+                    if (idx > 0) {
+                        showPage(pages[idx - 1])
+                        true
+                    } else false
+                }
+            }
+        })
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (::swipeDetector.isInitialized) {
+            runCatching { swipeDetector.onTouchEvent(ev) }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         // 系统深浅色切换会重建 Activity，这里把页面位置带上
@@ -1261,7 +1309,7 @@ class MainActivity : AppCompatActivity() {
         if (palette.isDark) {
             android.app.AlertDialog.Builder(this, R.style.AppDialogDark)
         } else {
-            android.app.AlertDialog.Builder(this)
+            android.app.AlertDialog.Builder(this, R.style.AppDialogLight)
         }
 
     private fun showIconDialog() {
@@ -1281,7 +1329,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dpToPx(10f), dpToPx(9f), dpToPx(10f), dpToPx(9f))
-                background = if (i == current) roundedBg(palette.accentSoft, 12f) else null
+                background = if (i == current) roundedBg(palette.accentSoft, 12f, palette.accent) else null
                 setOnClickListener {
                     dialog.dismiss()
                     if (i != current) {
@@ -1311,7 +1359,8 @@ class MainActivity : AppCompatActivity() {
                 row.addView(TextView(this).apply {
                     text = "使用中"
                     textSize = 10f
-                    setTextColor(palette.accent)
+                    setTextColor(palette.textPrimary)
+                    setTypeface(null, android.graphics.Typeface.BOLD)
                 })
             }
             list.addView(row)
