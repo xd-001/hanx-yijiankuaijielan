@@ -56,7 +56,9 @@ data class AppTheme(
         val appearanceOrder = intArrayOf(
             APPEARANCE_LIGHT, APPEARANCE_WARM, APPEARANCE_GREEN, APPEARANCE_DIM, APPEARANCE_DARK
         )
-        val appearanceLabels = arrayOf("白天", "护眼暖纸", "护眼绿", "夜间温和", "夜间激进")
+        /** 按 ID 顺序排（0 白天 / 1 护眼暖纸 / 2 夜间温和 / 3 夜间激进 / 4 护眼绿）。
+         *  界面展示顺序另用 appearanceOrder 映射，两者别混用。 */
+        val appearanceLabels = arrayOf("白天", "护眼暖纸", "夜间温和", "夜间激进", "护眼绿")
         val accentLabels = arrayOf(
             "紫（默认）", "苹果蓝", "苹果粉", "苹果绿", "苹果橙", "苹果紫",
             "护眼暖纸", "简洁白", "少女粉", "高能红", "咸蛋黄", "草苗绿", "宝石蓝", "罗兰紫"

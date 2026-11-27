@@ -94,6 +94,9 @@ class MainActivity : AppCompatActivity() {
 
     /** 预览里第一次点中的格子；再点另一个就交换 */
     private var swapIndex = -1
+
+    /** 启动页：0 统计 / 1 图标 */
+    private var startPage = 0
     private var rankExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,6 +107,7 @@ class MainActivity : AppCompatActivity() {
         statusStyle = uiPrefs.getInt("status_style", STYLE_CARD)
         hideSystemApps = uiPrefs.getBoolean("hide_system_apps", false)
         addedPosition = uiPrefs.getInt("added_position", 0)
+        startPage = uiPrefs.getInt("start_page", 0)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -125,7 +129,7 @@ class MainActivity : AppCompatActivity() {
 
         rootScroll = ScrollView(this)
         val pageHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val homeBottomPad = if (statusPosition == STATUS_BOTTOM) 196 else 110
+        val homeBottomPad = 118
         homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, dpToPx(homeBottomPad.toFloat())) }
         appsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
         settingsPage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 32, 40, 110); visibility = View.GONE }
@@ -248,6 +252,10 @@ class MainActivity : AppCompatActivity() {
         }
         appsPage.addView(seekBar)
 
+        appsPage.addView(appsOption("排序方式", sortModeLabel()) { showSortModeDialog() })
+        appsPage.addView(appsOption("翻页", pagingLabel()) { showPagingDialog() })
+        appsPage.addView(appsOption("点击震动", vibrateLabel()) { showVibrateDialog() })
+
         val btnHideApps = Button(this).apply {
             text = "🚫 把不想看到的 App 关进黑名单"
             setTextColor(palette.textSecondary)
@@ -294,6 +302,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         newApps = detectNewApps()
+
+        // 冷启动按用户选的启动页落脚（重建恢复优先，见上面的 restorePageIndex）
+        if (restorePageIndex < 0 && startPage == 1) {
+            showPage(appsPage)
+        }
 
         // 首次打开（或清数据后重装）先把使用说明摆到眼前，省得用户不知道要去放行自启
         val firstRunPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
@@ -435,8 +448,8 @@ class MainActivity : AppCompatActivity() {
             setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
             background = roundedBg(alphaOf(palette.card, 242), 28f, palette.divider)
         }
-        navMonitor = navItem("监测") { showPage(homePage) }
-        navApps = navItem("应用") { showPage(appsPage) }
+        navMonitor = navItem("统计") { showPage(homePage) }
+        navApps = navItem("图标") { showPage(appsPage) }
         navSettings = navItem("设置") { showPage(settingsPage) }
         nav.addView(navMonitor, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         nav.addView(navApps, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
@@ -479,14 +492,12 @@ class MainActivity : AppCompatActivity() {
         settingsRow("应用图标", AppIcon.labels[AppIcon.current(this)]) { showIconDialog() }
         settingsRow("跟随系统夜间", if (AppTheme.isFollowingNight(this)) "开" else "关") { toggleFollowNight() }
 
-        settingsGroup("通知栏")
-        settingsRow("排序方式", sortModeLabel()) { showSortModeDialog() }
-        settingsRow("翻页", pagingLabel()) { showPagingDialog() }
-        settingsRow("点击震动", vibrateLabel()) { showVibrateDialog() }
-
         settingsGroup("运行")
         settingsRow("掉线自检", watchdogLabel()) { showWatchdogDialog() }
         settingsRow("编辑应用与排序", "${selectedApps.size} 个应用") { showPage(appsPage) }
+
+        settingsGroup("启动页")
+        settingsRow("打开时进入", if (startPage == 1) "图标" else "统计") { showStartPageDialog() }
 
         settingsGroup("应用列表")
         settingsRow("隐藏系统应用", if (hideSystemApps) "开" else "关") { toggleHideSystem() }
@@ -659,6 +670,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showStartPageDialog() {
+        showChoiceDialog("打开时进入", arrayOf("统计（数据面板）", "图标（应用列表）"), startPage) { which ->
+            startPage = which
+            getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+                .putInt("start_page", which).apply()
+            recreateKeepingPage()
+        }
+    }
+
     private fun showWidgetTip() {
         AlertDialog.Builder(this)
             .setTitle("添加桌面插件")
@@ -742,6 +762,28 @@ class MainActivity : AppCompatActivity() {
         else -> "手动顺序"
     }
 
+    /** 应用页里的配置行：和设置页同一套观感，但挂在应用页下 */
+    private fun appsOption(title: String, value: String, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(14f), dpToPx(12f), dpToPx(14f), dpToPx(12f))
+            background = roundedBg(palette.card, 12f)
+            setOnClickListener { onClick() }
+        }
+        row.addView(TextView(this).apply {
+            text = title
+            textSize = 13f
+            setTextColor(palette.textPrimary)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(TextView(this).apply {
+            text = value
+            textSize = 12f
+            setTextColor(palette.textSecondary)
+        })
+        return row
+    }
+
     private fun pagingLabel(): String = when {
         NotifyCore.isPagingEnabled(this) && NotifyCore.getPagingMode(this) == NotifyCore.PAGE_EXPAND -> "展开全部"
         !NotifyCore.isPagingEnabled(this) -> "关闭"
@@ -788,7 +830,7 @@ class MainActivity : AppCompatActivity() {
             getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
                 .putInt("sort_mode", which).apply()
             NotifyCore.scheduleRefresh(this)
-            buildSettingsPage()
+            recreateKeepingPage()
         }
     }
 
@@ -817,7 +859,7 @@ class MainActivity : AppCompatActivity() {
                 .putInt("current_page", 0)
                 .apply()
             NotifyCore.scheduleRefresh(this)
-            buildSettingsPage()
+            recreateKeepingPage()
         }
     }
 
@@ -825,7 +867,7 @@ class MainActivity : AppCompatActivity() {
         showChoiceDialog("点击震动", arrayOf("关闭", "弱（推荐）", "强"), NotifyCore.getVibrateMode(this)) { which ->
             getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
                 .putInt("vibrate_mode", which).apply()
-            buildSettingsPage()
+            recreateKeepingPage()
         }
     }
 
@@ -848,8 +890,9 @@ class MainActivity : AppCompatActivity() {
     /** 背景档位与强调色各自独立：5 × 14 种组合，随用户搭 */
     private fun showAppearanceDialog() {
         val order = AppTheme.appearanceOrder
+        val options = order.map { AppTheme.appearanceLabels[it] }.toTypedArray()
         val current = order.indexOf(palette.appearance).coerceAtLeast(0)
-        showChoiceDialog("背景", AppTheme.appearanceLabels, current) { which ->
+        showChoiceDialog("背景", options, current) { which ->
             val id = order[which]
             if (id != palette.appearance) {
                 AppTheme.save(this, id, palette.accentId)
@@ -1457,24 +1500,15 @@ class MainActivity : AppCompatActivity() {
 
         // 状态卡交给 buildStatusView 决定形态，位置按配置放到顶部或底部悬浮层
         val statusView = buildStatusView()
+        // 顶部：第一屏就能看到；底部：跟在内容最后，滚到底才见，不遮挡任何东西
+        val statusParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(12f) }
         if (statusPosition == STATUS_TOP) {
-            homePage.addView(
-                statusView,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dpToPx(12f) }
-            )
+            homePage.addView(statusView, 0, statusParams)
         } else {
-            statusFloat.removeAllViews()
-            statusFloat.addView(
-                statusView,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-            )
-            statusFloat.visibility = View.VISIBLE
+            homePage.addView(statusView, statusParams)
         }
 
         homePage.addView(quickToolsRow())
@@ -2167,41 +2201,56 @@ class MainActivity : AppCompatActivity() {
 
     private fun dpToPx(dp: Float): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics).toInt()
 
-    /** 把已选队列画成 20 格预览（监测页和应用页共用一份渲染逻辑） */
+    /** 把已选队列画成预览（统计页和图标页共用）。按行构建，行高固定，避免第二行被压塌 */
     private fun fillPreview(container: LinearLayout) {
         val pm = packageManager
         container.removeAllViews()
         val previewApps = selectedApps.take(20)
-        val previewRows = maxOf(1, (previewApps.size + columnsPerRow - 1) / columnsPerRow)
-        val previewRowHeight = minOf(dpToPx(44f), dpToPx(200f) / previewRows).coerceAtLeast(dpToPx(24f))
-        var currentRow: LinearLayout? = null
+        if (previewApps.isEmpty()) return
 
-        for (i in previewApps.indices) {
-            if (i % columnsPerRow == 0) {
-                currentRow = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    weightSum = columnsPerRow.toFloat()
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, previewRowHeight)
-                }
-                container.addView(currentRow)
+        val cols = columnsPerRow.coerceIn(1, 10)
+        val rows = (previewApps.size + cols - 1) / cols
+        val rowHeight = dpToPx(40f)
+        val gap = dpToPx(3f)
+
+        for (r in 0 until rows) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                weightSum = cols.toFloat()
             }
-            val app = allApps.find { it.activityInfo.packageName == previewApps[i] }
-            val iconView = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dpToPx(8f).toFloat()
-                    setColor(palette.cardSoft)
-                    if (i == swapIndex) {
-                        setStroke(dpToPx(2f), palette.accent)
+            for (c in 0 until cols) {
+                val idx = r * cols + c
+                val cell = FrameLayout(this)
+                row.addView(
+                    cell,
+                    LinearLayout.LayoutParams(0, rowHeight, 1f)
+                )
+                if (idx >= previewApps.size) continue
+
+                val app = allApps.find { it.activityInfo.packageName == previewApps[idx] }
+                cell.addView(ImageView(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    ).apply { setMargins(gap, gap, gap, gap) }
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dpToPx(8f).toFloat()
+                        setColor(palette.cardSoft)
+                        if (idx == swapIndex) setStroke(dpToPx(2f), palette.accent)
                     }
-                }
-                clipToOutline = true
-                app?.let { setImageDrawable(it.loadIcon(pm)) }
-                setOnClickListener { onPreviewTap(i) }
+                    clipToOutline = true
+                    app?.let { setImageDrawable(it.loadIcon(pm)) }
+                    setOnClickListener { onPreviewTap(idx) }
+                })
             }
-            currentRow?.addView(iconView)
+            container.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    rowHeight
+                )
+            )
         }
     }
 
