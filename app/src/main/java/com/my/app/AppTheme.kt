@@ -130,6 +130,18 @@ data class AppTheme(
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getBoolean(KEY_FOLLOW_NIGHT, false)
 
+        /** 跟随系统时，深色时段用哪一档（默认夜间温和） */
+        fun readNightAppearance(context: Context): Int {
+            val v = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt("night_appearance", APPEARANCE_DIM)
+            return if (v == APPEARANCE_DARK) APPEARANCE_DARK else APPEARANCE_DIM
+        }
+
+        fun saveNightAppearance(context: Context, appearance: Int) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt("night_appearance", appearance).apply()
+        }
+
         fun setFollowingNight(context: Context, follow: Boolean) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_FOLLOW_NIGHT, follow).apply()
@@ -143,7 +155,7 @@ data class AppTheme(
             val accent = readAccent(context)
             if (!isFollowingNight(context)) return build(readAppearance(context), accent)
 
-            if (isSystemDark(context)) return build(APPEARANCE_DIM, accent)
+            if (isSystemDark(context)) return build(readNightAppearance(context), accent)
             val chosen = readAppearance(context)
             val light = if (chosen == APPEARANCE_DIM || chosen == APPEARANCE_DARK) APPEARANCE_LIGHT else chosen
             return build(light, accent)

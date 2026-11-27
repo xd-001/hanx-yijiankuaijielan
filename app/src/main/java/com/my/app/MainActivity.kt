@@ -545,6 +545,12 @@ class MainActivity : AppCompatActivity() {
         }) { showStatusStyleDialog() }
         settingsRow("应用图标", AppIcon.labels[AppIcon.current(this)]) { showIconDialog() }
         settingsRow("跟随系统夜间", if (AppTheme.isFollowingNight(this)) "开" else "关") { toggleFollowNight() }
+        if (AppTheme.isFollowingNight(this)) {
+            settingsRow(
+                "夜间背景",
+                if (AppTheme.readNightAppearance(this) == AppTheme.APPEARANCE_DARK) "夜间激进" else "夜间温和"
+            ) { showNightAppearanceDialog() }
+        }
 
         settingsGroup("运行")
         settingsRow("掉线自检", watchdogLabel()) { showWatchdogDialog() }
@@ -1293,6 +1299,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** 跟随系统夜间：切换后重建，颜色由 AppTheme.current 按系统状态决定 */
+    private fun showNightAppearanceDialog() {
+        val opts = arrayOf("夜间温和", "夜间激进")
+        val cur = if (AppTheme.readNightAppearance(this) == AppTheme.APPEARANCE_DARK) 1 else 0
+        showChoiceDialog("夜间背景", opts, cur) { which ->
+            AppTheme.saveNightAppearance(
+                this,
+                if (which == 1) AppTheme.APPEARANCE_DARK else AppTheme.APPEARANCE_DIM
+            )
+            recreateKeepingPage()
+        }
+    }
+
     private fun toggleFollowNight() {
         val follow = !AppTheme.isFollowingNight(this)
         AppTheme.setFollowingNight(this, follow)
