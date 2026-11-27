@@ -535,7 +535,7 @@ class MainActivity : AppCompatActivity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 setPadding(dpToPx(12f), dpToPx(8f), dpToPx(12f), dpToPx(8f))
             }
-            AlertDialog.Builder(this)
+            newDialog()
                 .setTitle(if (days == 7) "本周使用海报" else "本月使用海报")
                 .setView(iv)
                 .setPositiveButton("保存到相册") { _, _ -> saveReport(bmp, days) }
@@ -682,7 +682,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showWidgetTip() {
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle("添加桌面插件")
             .setMessage(
                 "长按桌面空白处 → 小组件 / 插件 → 找到「快捷通知」→ 选横版或竖版拖到桌面。\n\n" +
@@ -811,7 +811,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showChoiceDialog(title: String, options: Array<String>, current: Int, onPick: (Int) -> Unit) {
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle(title)
             .setSingleChoiceItems(options, current) { dialog, which ->
                 dialog.dismiss()
@@ -979,7 +979,7 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "读取失败，或文件是空的", Toast.LENGTH_LONG).show()
                     return
                 }
-                AlertDialog.Builder(this)
+                newDialog()
                     .setTitle("导入使用记录")
                     .setMessage("合并：同一天取较大值，明细按时间戳去重，导两次不会翻倍。\n覆盖：先清空现有记录再写入。")
                     .setPositiveButton("合并") { _, _ -> doImportUsage(text, true) }
@@ -1256,13 +1256,21 @@ class MainActivity : AppCompatActivity() {
         ).show()
     }
 
+    /** 夜间模式下弹窗走深色主题，否则白底在暗环境里太刺眼 */
+    private fun newDialog(): android.app.AlertDialog.Builder =
+        if (palette.isDark) {
+            android.app.AlertDialog.Builder(this, R.style.AppDialogDark)
+        } else {
+            android.app.AlertDialog.Builder(this)
+        }
+
     private fun showIconDialog() {
         val current = AppIcon.current(this)
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(10f), dpToPx(6f), dpToPx(10f), dpToPx(6f))
         }
-        val dialog = AlertDialog.Builder(this)
+        val dialog = newDialog()
             .setTitle("应用图标")
             .setView(list)
             .setNegativeButton("取消", null)
@@ -1836,7 +1844,7 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(100f)
         ))
 
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle(label)
             .setView(box)
             .setPositiveButton("知道了", null)
@@ -1970,7 +1978,7 @@ class MainActivity : AppCompatActivity() {
             val app = displayApps[position]
             val pkg = app.activityInfo.packageName
             val name = app.loadLabel(pm).toString()
-            AlertDialog.Builder(this)
+            newDialog()
                 .setTitle("卸载「$name」？")
                 .setMessage("会打开系统的卸载确认界面，确认后才会真正删除。\n\n$pkg")
                 .setPositiveButton("去卸载") { _, _ ->
@@ -1991,7 +1999,7 @@ class MainActivity : AppCompatActivity() {
             addView(gridView)
         }
 
-        AlertDialog.Builder(this)
+        newDialog()
             .setView(layout)
             .setPositiveButton("确认保存") { _, _ ->
                 selectedApps.clear()
@@ -2124,7 +2132,7 @@ class MainActivity : AppCompatActivity() {
             val app = displayApps[position]
             val pkg = app.activityInfo.packageName
             val name = app.loadLabel(pm).toString()
-            AlertDialog.Builder(this)
+            newDialog()
                 .setTitle("卸载「$name」？")
                 .setMessage("会打开系统的卸载确认界面，确认后才会真正删除。\n\n$pkg")
                 .setPositiveButton("去卸载") { _, _ ->
@@ -2145,7 +2153,7 @@ class MainActivity : AppCompatActivity() {
             addView(gridView)
         }
 
-        AlertDialog.Builder(this)
+        newDialog()
             .setView(layout)
             .setPositiveButton("确认保存黑名单") { _, _ ->
                 hiddenApps.clear()
@@ -2425,7 +2433,7 @@ class MainActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        val builder = AlertDialog.Builder(this)
+        val builder = newDialog()
             .setTitle("应用打开记录（仅本地）")
             .setView(container)
             .setPositiveButton("关闭", null)
@@ -2433,7 +2441,7 @@ class MainActivity : AppCompatActivity() {
         if (NotifyCore.getRecordLimit(this) != NotifyCore.RECORD_OFF) {
             builder.setNeutralButton("清空记录") { _, _ ->
                 // 二次确认：这一步不可撤销，不能一点就没
-                AlertDialog.Builder(this@MainActivity)
+                newDialog()
                     .setTitle("清空全部打开记录？")
                     .setMessage("会清掉所有明细、按天统计和累计次数，清完无法恢复。\n\n只是想停止记录的话，把上面的上限改成「关闭」即可，历史会留着。")
                     .setPositiveButton("确认清空") { _, _ ->
@@ -2471,7 +2479,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showImportDialog() {
         val items: Array<CharSequence> = arrayOf("从备份文件导入", "从剪贴板粘贴")
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle("导入配置")
             .setItems(items) { _, which ->
                 if (which == 0) showFileImportDialog() else showPasteImportDialog()
@@ -2489,7 +2497,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val names: Array<CharSequence> = files.map { it.name as CharSequence }.toTypedArray()
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle("选择备份文件（最新在前）")
             .setItems(names) { _, idx ->
                 try {
@@ -2520,7 +2528,7 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
-        AlertDialog.Builder(this)
+        newDialog()
             .setTitle("粘贴配置文本")
             .setView(scroll)
             .setPositiveButton("导入") { _, _ -> applyImportedConfig(et.text.toString()) }

@@ -9,4 +9,13 @@
     <style name="Theme.QuickNotify" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
+
+    <!-- 深色弹窗：夜间模式下别再用白底晃眼 -->
+    <style name="AppDialogDark" parent="Theme.AppCompat.Dialog">
+        <item name="android:windowBackground">@drawable/dialog_dark_bg</item>
+        <item name="android:textColorPrimary">#F2F2F5</item>
+        <item name="android:textColorSecondary">#A0A0A8</item>
+        <item name="colorAccent">#9B8CFF</item>
+        <item name="colorPrimary">#9B8CFF</item>
+    </style>
 </resources>
