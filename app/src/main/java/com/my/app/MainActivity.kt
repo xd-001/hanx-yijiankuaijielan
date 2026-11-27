@@ -1498,18 +1498,8 @@ class MainActivity : AppCompatActivity() {
     private fun buildHomeDashboard() {
         homePage.removeAllViews()
 
-        // 状态卡交给 buildStatusView 决定形态，位置按配置放到顶部或底部悬浮层
+        // 先把控件建出来（updateStatus 依赖 tvStatus 等），真正插入放到最后
         val statusView = buildStatusView()
-        // 顶部：第一屏就能看到；底部：跟在内容最后，滚到底才见，不遮挡任何东西
-        val statusParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(12f) }
-        if (statusPosition == STATUS_TOP) {
-            homePage.addView(statusView, 0, statusParams)
-        } else {
-            homePage.addView(statusView, statusParams)
-        }
 
         homePage.addView(quickToolsRow())
 
@@ -1626,6 +1616,17 @@ class MainActivity : AppCompatActivity() {
             previewCard,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
+
+        // 状态卡最后插：顶部模式放进第 0 位，底部模式自然落在内容末尾
+        val statusParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dpToPx(4f) }
+        if (statusPosition == STATUS_TOP) {
+            homePage.addView(statusView, 0, statusParams)
+        } else {
+            homePage.addView(statusView, statusParams)
+        }
 
         updateSegments()
         updateStatus()
