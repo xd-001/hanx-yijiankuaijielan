@@ -542,7 +542,7 @@ class MainActivity : AppCompatActivity() {
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
         val pm = packageManager
         val since = System.currentTimeMillis() - days * 86_400_000L
-        val counts = NotifyCore.countsByPackageSince(this, since)
+        val counts = NotifyCore.countsByPackageSince(this, since).toMap()
         val total = counts.values.sum()
         val top = counts.entries.sortedByDescending { it.value }.take(5)
 
@@ -1996,7 +1996,7 @@ class MainActivity : AppCompatActivity() {
     private fun idleAppsCard(): View? {
         if (selectedApps.isEmpty()) return null
         val weekAgo = System.currentTimeMillis() - 7L * 86_400_000L
-        val counts = NotifyCore.countsByPackageSince(this, weekAgo)
+        val counts = NotifyCore.countsByPackageSince(this, weekAgo).toMap()
         val idle = selectedApps.filter { (counts[it] ?: 0) < 7 }
         if (idle.isEmpty()) return null
 
@@ -2010,14 +2010,14 @@ class MainActivity : AppCompatActivity() {
         }
         if (names.isEmpty()) return null
 
-        val text = buildString {
+        val msg = buildString {
             append("💤 一周没怎么用（日均不到 1 次）：")
             append(names.joinToString("、"))
             if (idle.size > names.size) append(" 等 ${idle.size} 个")
             append("\n想让通知栏清爽点，可以在多选里取消勾选。")
         }
         return TextView(this).apply {
-            text = text
+            text = msg
             textSize = 11f
             setLineSpacing(dpToPx(3f).toFloat(), 1f)
             setTextColor(palette.textSecondary)
