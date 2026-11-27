@@ -16,7 +16,6 @@ import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.util.TypedValue
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -101,7 +100,6 @@ class MainActivity : AppCompatActivity() {
     /** 启动页：0 统计 / 1 图标 */
     private var startPage = 0
 
-    private lateinit var swipeDetector: android.view.GestureDetector
     private var currentPageView: View? = null
     private var rankExpanded = false
 
@@ -315,7 +313,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         newApps = detectNewApps()
-        setupSwipe()
 
         // 冷启动按用户选的启动页落脚（重建恢复优先，见上面的 restorePageIndex）
         if (restorePageIndex < 0 && startPage == 1) {
@@ -403,42 +400,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Deprecated in Java")
-    /** 左右滑切页：只在前三页之间走，关于页/使用说明页不参与（返回键更自然） */
-    private fun setupSwipe() {
-        swipeDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
+    // 横向滑动的起点与时间，用于在抬手瞬间判定是「翻页」还是「点了一下」
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var touchDownAt = 0L
+    private var swipeConsumed = false
 
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
-                if (e1 == null) return false
-                val dx = e2.x - e1.x
-                val dy = e2.y - e1.y
-                // 必须是「横向为主」的快速滑动，否则让页面自己滚
-                if (abs(dx) < dpToPx(60f) || abs(dx) < abs(dy) * 1.6f) return false
-
-                val pages = listOf(homePage, appsPage, settingsPage)
-                val idx = pages.indexOfFirst { it === currentPageView }
-                if (idx < 0) return false
-
-                return if (dx < 0) {
-                    if (idx < pages.size - 1) {
-                        showPage(pages[idx + 1])
-                        true
-                    } else false
-                } else {
-                    if (idx > 0) {
-                        showPage(pages[idx - 1])
-                        true
-                    } else false
+    /**
+     * 左右滑切页。判定放在 ACTION_UP：位移够大就切页并把这次事件吞掉，
+     * 否则子 View 仍会收到 UP 而误触发点击（之前用 GestureDetector 就踩了这个坑）。
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchDownX = ev.x
+                touchDownY = ev.y
+                touchDownAt = ev.eventTime
+                swipeConsumed = false
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!swipeConsumed) {
+                    val dx = ev.x - touchDownX
+                    val dy = ev.y - touchDownY
+                    val horizontal = abs(dx) > dpToPx(56f) && abs(dx) > abs(dy) * 1.5f
+                    if (horizontal && trySwipePage(if (dx < 0) 1 else -1)) {
+                        swipeConsumed = true
+                        return true   // 吞掉这次抬手，防止穿透成点击
+                    }
                 }
             }
-        })
-    }
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (::swipeDetector.isInitialized) {
-            runCatching { swipeDetector.onTouchEvent(ev) }
+            MotionEvent.ACTION_CANCEL -> swipeConsumed = false
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** dir: 1 = 往左滑（下一页），-1 = 往右滑（上一页） */
+    private fun trySwipePage(dir: Int): Boolean {
+        val pages = listOf(homePage, appsPage, settingsPage)
+        val idx = pages.indexOfFirst { it === currentPageView }
+        if (idx < 0) return false
+        val target = idx + dir
+        if (target !in pages.indices) return false
+        showPage(pages[target])
+        return true
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
