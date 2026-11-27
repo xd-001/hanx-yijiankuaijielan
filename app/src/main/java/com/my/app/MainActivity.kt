@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.*
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
@@ -83,6 +84,16 @@ class MainActivity : AppCompatActivity() {
 
     /** 0 监测 / 1 应用 / 2 设置 / 3 关于 / 4 使用说明 */
     private var currentPageIndex = 0
+
+    // 应用列表偏好：是否隐藏系统应用；已添加应用在多选里的位置（0 保持 / 1 置顶 / 2 置底）
+    private var hideSystemApps = false
+    private var addedPosition = 0
+
+    /** 本次启动新出现的应用（对比 known_apps），多选时标「新」并靠前 */
+    private var newApps: Set<String> = emptySet()
+
+    /** 预览里第一次点中的格子；再点另一个就交换 */
+    private var swapIndex = -1
     private var rankExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,6 +102,8 @@ class MainActivity : AppCompatActivity() {
         val uiPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
         statusPosition = uiPrefs.getInt("status_position", STATUS_TOP)
         statusStyle = uiPrefs.getInt("status_style", STYLE_CARD)
+        hideSystemApps = uiPrefs.getBoolean("hide_system_apps", false)
+        addedPosition = uiPrefs.getInt("added_position", 0)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
@@ -253,6 +266,9 @@ class MainActivity : AppCompatActivity() {
         }
         appsPage.addView(btnAdd)
 
+        // 一周没怎么用的应用：日均 < 1 次（一周总数 < 7）
+        idleAppsCard()?.let { appsPage.addView(it) }
+
         appsPage.addView(TextView(this).apply { text = "📝 已选队列（置顶 / 上移 / 下移 / 删除）："; textSize = 15f; setPadding(0, 30, 0, 10); setTextColor(palette.textSecondary) })
 
         selectedListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 20, 0, 0) }
@@ -276,6 +292,8 @@ class MainActivity : AppCompatActivity() {
             restorePageIndex = -1
             restoreScrollY = 0
         }
+
+        newApps = detectNewApps()
 
         // 首次打开（或清数据后重装）先把使用说明摆到眼前，省得用户不知道要去放行自启
         val firstRunPrefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
@@ -470,8 +488,13 @@ class MainActivity : AppCompatActivity() {
         settingsRow("掉线自检", watchdogLabel()) { showWatchdogDialog() }
         settingsRow("编辑应用与排序", "${selectedApps.size} 个应用") { showPage(appsPage) }
 
+        settingsGroup("应用列表")
+        settingsRow("隐藏系统应用", if (hideSystemApps) "开" else "关") { toggleHideSystem() }
+        settingsRow("已添加的位置", arrayOf("保持现状", "置顶", "置底")[addedPosition]) { showAddedPositionDialog() }
+
         settingsGroup("数据")
         settingsRow("打开记录", recordLimitLabel()) { showOpenRecordsDialog() }
+        settingsRow("生成使用海报", "周报 / 月报，可保存分享") { showReportDialog() }
         settingsRow("导出使用记录", usageSummary()) { showExportUsageDialog() }
         settingsRow("导入使用记录", "合并或覆盖") { startImportUsage() }
         settingsRow("导出配置", "文件 + 剪贴板") { exportConfig() }
@@ -481,6 +504,158 @@ class MainActivity : AppCompatActivity() {
         settingsGroup("其他")
         settingsRow("使用说明", "自启 / 锁任务 / 白名单") { showPage(guidePage) }
         settingsRow("关于", "v${appVersion()} · 更新记录") { showPage(aboutPage) }
+    }
+
+    private fun showReportDialog() {
+        showChoiceDialog("生成使用海报", arrayOf("最近 7 天（周报）", "最近 30 天（月报）"), 0) { which ->
+            val days = if (which == 0) 7 else 30
+            val bmp = try {
+                buildReportBitmap(days)
+            } catch (e: Exception) {
+                Toast.makeText(this, "生成失败：" + e.message, Toast.LENGTH_LONG).show()
+                return@showChoiceDialog
+            }
+            val iv = ImageView(this).apply {
+                setImageBitmap(bmp)
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(dpToPx(12f), dpToPx(8f), dpToPx(12f), dpToPx(8f))
+            }
+            AlertDialog.Builder(this)
+                .setTitle(if (days == 7) "本周使用海报" else "本月使用海报")
+                .setView(iv)
+                .setPositiveButton("保存到相册") { _, _ -> saveReport(bmp, days) }
+                .setNeutralButton("直接分享") { _, _ -> shareReport(bmp, days) }
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
+
+    /** 纯本地画一张海报：底色跟随主题，不联网、不上传 */
+    private fun buildReportBitmap(days: Int): android.graphics.Bitmap {
+        val w = 720
+        val h = 1000
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        c.drawColor(palette.bg)
+
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val pm = packageManager
+        val since = System.currentTimeMillis() - days * 86_400_000L
+        val counts = NotifyCore.countsByPackageSince(this, since)
+        val total = counts.values.sum()
+        val top = counts.entries.sortedByDescending { it.value }.take(5)
+
+        paint.color = palette.textPrimary
+        paint.textSize = 46f
+        paint.typeface = android.graphics.Typeface.create(
+            android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD
+        )
+        c.drawText(if (days == 7) "这周我打开了" else "这月我打开了", 52f, 120f, paint)
+
+        paint.color = palette.accent
+        paint.textSize = 128f
+        val numText = total.toString()
+        c.drawText(numText, 52f, 268f, paint)
+        val numWidth = paint.measureText(numText)
+
+        paint.color = palette.textPrimary
+        paint.textSize = 40f
+        c.drawText(" 次", 52f + numWidth, 268f, paint)
+
+        paint.textSize = 26f
+        paint.typeface = android.graphics.Typeface.DEFAULT
+        paint.color = palette.textSecondary
+        val fmt = java.text.SimpleDateFormat("M月d日", java.util.Locale.getDefault())
+        val from = fmt.format(java.util.Date(since))
+        val to = fmt.format(java.util.Date())
+        c.drawText("$from - $to · 共 ${counts.size} 个应用", 52f, 320f, paint)
+
+        var y = 400f
+        paint.color = palette.textPrimary
+        paint.textSize = 30f
+        paint.typeface = android.graphics.Typeface.create(
+            android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD
+        )
+        c.drawText("打开最多的几个", 52f, y, paint)
+        y += 46f
+
+        val maxCount = top.firstOrNull()?.value?.coerceAtLeast(1) ?: 1
+        paint.typeface = android.graphics.Typeface.DEFAULT
+        for ((pkg, n) in top) {
+            val label = try {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            } catch (e: Exception) {
+                pkg
+            }
+            paint.textSize = 26f
+            paint.color = palette.textPrimary
+            c.drawText(label, 52f, y, paint)
+            paint.textAlign = android.graphics.Paint.Align.RIGHT
+            paint.color = palette.accent
+            c.drawText(n.toString(), w - 52f, y, paint)
+            paint.textAlign = android.graphics.Paint.Align.LEFT
+
+            val barY = y + 14f
+            paint.color = palette.track
+            c.drawRoundRect(52f, barY, w - 52f, barY + 10f, 5f, 5f, paint)
+            paint.color = palette.accent
+            val barW = 52f + (w - 104f) * (n.toFloat() / maxCount)
+            c.drawRoundRect(52f, barY, barW, barY + 10f, 5f, 5f, paint)
+            y += 64f
+        }
+
+        paint.textSize = 22f
+        paint.color = palette.textTertiary
+        paint.textAlign = android.graphics.Paint.Align.CENTER
+        c.drawText("快捷通知 · 数据只存在这台手机里", w / 2f, h - 56f, paint)
+        paint.textAlign = android.graphics.Paint.Align.LEFT
+
+        return bmp
+    }
+
+    /** 存进系统相册（Pictures/快捷通知），不需要存储权限 */
+    private fun saveReport(bmp: android.graphics.Bitmap, days: Int): android.net.Uri? {
+        val kind = if (days == 7) "周报" else "月报"
+        val name = "快捷通知-$kind-${System.currentTimeMillis()}.png"
+        return try {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                if (Build.VERSION.SDK_INT >= 29) {
+                    put(
+                        android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                        "Pictures/快捷通知"
+                    )
+                }
+            }
+            val uri = contentResolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+            ) ?: return null
+            contentResolver.openOutputStream(uri)?.use {
+                bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            Toast.makeText(this, "已存到相册：Pictures/快捷通知", Toast.LENGTH_LONG).show()
+            uri
+        } catch (e: Exception) {
+            Toast.makeText(this, "保存失败：" + e.message, Toast.LENGTH_LONG).show()
+            null
+        }
+    }
+
+    private fun shareReport(bmp: android.graphics.Bitmap, days: Int) {
+        val uri = saveReport(bmp, days) ?: return
+        try {
+            startActivity(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, "没有可分享的应用，图片已保存到相册", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun usageSummary(): String {
@@ -1219,6 +1394,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private data class QuickTool(val label: String, val uri: String, val pkg: String)
+
+    /** 扫一扫 / 付款码 / 乘车码：走各家深链，失效就退回打开 App 本身 */
+    private fun quickToolsRow(): View {
+        val tools = listOf(
+            QuickTool("微信扫一扫", "weixin://dl/scan", "com.tencent.mm"),
+            QuickTool("支付宝扫一扫", "alipays://platformapi/startapp?appId=10000007", "com.eg.android.AlipayGphone"),
+            QuickTool("付款码", "alipays://platformapi/startapp?appId=20000056", "com.eg.android.AlipayGphone"),
+            QuickTool("乘车码", "alipays://platformapi/startapp?appId=200011235", "com.eg.android.AlipayGphone")
+        )
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = tools.size.toFloat()
+        }
+        for (tool in tools) {
+            row.addView(TextView(this).apply {
+                text = tool.label
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTextColor(palette.textSecondary)
+                setPadding(0, dpToPx(9f), 0, dpToPx(9f))
+                background = roundedBg(palette.card, 12f)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { rightMargin = dpToPx(6f) }
+                setOnClickListener { openQuickTool(tool) }
+            })
+        }
+        row.setPadding(0, dpToPx(12f), 0, dpToPx(2f))
+        return row
+    }
+
+    private fun openQuickTool(tool: QuickTool) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tool.uri)))
+        } catch (e: Exception) {
+            val launch = packageManager.getLaunchIntentForPackage(tool.pkg)
+            if (launch != null) {
+                startActivity(launch)
+                Toast.makeText(this, "快捷方式失效了，已打开应用首页", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "没装对应的应用", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun buildHomeDashboard() {
         homePage.removeAllViews()
 
@@ -1243,6 +1463,8 @@ class MainActivity : AppCompatActivity() {
             )
             statusFloat.visibility = View.VISIBLE
         }
+
+        homePage.addView(quickToolsRow())
 
         val seg = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1610,13 +1832,74 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * 找出新安装的应用：拿当前可启动列表跟 known_apps 做差集。
+     * 第一次运行（known_apps 为空）时只登记、不标记，避免把现有几十个应用全标成新的。
+     */
+    private fun detectNewApps(): Set<String> {
+        val prefs = getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE)
+        val stored = (prefs.getString("known_apps", "") ?: "")
+            .split(",").filter { it.isNotEmpty() }.toSet()
+        val current = allApps.map { it.activityInfo.packageName }.toSet()
+
+        if (stored.isEmpty()) {
+            prefs.edit().putString("known_apps", current.joinToString(",")).apply()
+            return emptySet()
+        }
+        val fresh = current - stored
+        if (fresh.isNotEmpty()) {
+            prefs.edit().putString("known_apps", (stored + fresh).joinToString(",")).apply()
+        }
+        return fresh
+    }
+
+    /** 按设置过滤：黑名单 + 可选的系统应用 */
+    private fun visibleApps(): List<ResolveInfo> {
+        return allApps.filter { app ->
+            val pkg = app.activityInfo.packageName
+            if (hiddenApps.contains(pkg)) return@filter false
+            if (hideSystemApps) {
+                val flags = app.activityInfo.applicationInfo.flags
+                val system = flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0
+                val updated = flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
+                // 被用户更新过的系统应用（如升级过的浏览器）算普通应用，保留
+                if (system && !updated) return@filter false
+            }
+            true
+        }
+    }
+
+    /** 多选列表排序：已添加的可选择置顶 / 置底 / 保持字母序 */
+    private fun sortForPicker(apps: List<ResolveInfo>, selected: Set<String>): List<ResolveInfo> {
+        val pm = packageManager
+        fun label(r: ResolveInfo) = r.loadLabel(pm).toString()
+        return when (addedPosition) {
+            1 -> apps.sortedWith(
+                compareByDescending<ResolveInfo> { selected.contains(it.activityInfo.packageName) }
+                    .thenBy { label(it) }
+            )
+            2 -> apps.sortedWith(
+                compareBy<ResolveInfo> { selected.contains(it.activityInfo.packageName) }
+                    .thenBy { label(it) }
+            )
+            else -> apps.sortedWith(
+                compareByDescending<ResolveInfo> { newApps.contains(it.activityInfo.packageName) }
+                    .thenBy { label(it) }
+            )
+        }
+    }
+
     private fun showGridAddDialog() {
         val pm = packageManager
-        val displayApps = allApps.filter { !hiddenApps.contains(it.activityInfo.packageName) }
         val tempSelectedPkgs = mutableSetOf<String>().apply { addAll(selectedApps) }
+        val displayApps = sortForPicker(visibleApps(), tempSelectedPkgs)
 
         val tvCounter = TextView(this).apply {
-            text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
+            text = buildString {
+                append("✨ 连点选择 · 长按可卸载：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个")
+                val freshCount = displayApps.count { newApps.contains(it.activityInfo.packageName) }
+                if (freshCount > 0) append(" · 🆕 $freshCount 个新安装")
+            }
             textSize = 16f
             gravity = Gravity.CENTER
             setPadding(0, 30, 0, 20)
@@ -1669,7 +1952,26 @@ class MainActivity : AppCompatActivity() {
                 mask.visibility = View.VISIBLE
                 mask.setBackgroundColor(Color.parseColor("#884CAF50"))
             }
-            tvCounter.text = "✨ 连点选择：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
+            tvCounter.text = "✨ 连点选择 · 长按可卸载：已选 ${tempSelectedPkgs.size} / ${displayApps.size} 个"
+        }
+
+        gridView.setOnItemLongClickListener { _, _, position, _ ->
+            val app = displayApps[position]
+            val pkg = app.activityInfo.packageName
+            val name = app.loadLabel(pm).toString()
+            AlertDialog.Builder(this)
+                .setTitle("卸载「$name」？")
+                .setMessage("会打开系统的卸载确认界面，确认后才会真正删除。\n\n$pkg")
+                .setPositiveButton("去卸载") { _, _ ->
+                    try {
+                        startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")))
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "系统不允许从这里卸载，请到设置里操作", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("取消", null)
+                .show()
+            true
         }
 
         val layout = LinearLayout(this).apply {
@@ -1688,6 +1990,61 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("取消", null)
             .show()
+    }
+
+    /** 一周内总打开次数 < 7（≈ 日均 < 1）的已选应用 */
+    private fun idleAppsCard(): View? {
+        if (selectedApps.isEmpty()) return null
+        val weekAgo = System.currentTimeMillis() - 7L * 86_400_000L
+        val counts = NotifyCore.countsByPackageSince(this, weekAgo)
+        val idle = selectedApps.filter { (counts[it] ?: 0) < 7 }
+        if (idle.isEmpty()) return null
+
+        val pm = packageManager
+        val names = idle.take(4).mapNotNull { pkg ->
+            try {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (names.isEmpty()) return null
+
+        val text = buildString {
+            append("💤 一周没怎么用（日均不到 1 次）：")
+            append(names.joinToString("、"))
+            if (idle.size > names.size) append(" 等 ${idle.size} 个")
+            append("\n想让通知栏清爽点，可以在多选里取消勾选。")
+        }
+        return TextView(this).apply {
+            text = text
+            textSize = 11f
+            setLineSpacing(dpToPx(3f).toFloat(), 1f)
+            setTextColor(palette.textSecondary)
+            setPadding(dpToPx(12f), dpToPx(10f), dpToPx(12f), dpToPx(10f))
+            background = roundedBg(palette.accentSoft, 12f)
+        }
+    }
+
+    private fun toggleHideSystem() {
+        hideSystemApps = !hideSystemApps
+        getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+            .putBoolean("hide_system_apps", hideSystemApps).apply()
+        buildSettingsPage()
+        Toast.makeText(
+            this,
+            if (hideSystemApps) "多选列表已隐藏系统应用" else "已显示全部应用",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun showAddedPositionDialog() {
+        showChoiceDialog("已添加应用的位置", arrayOf("保持现状（字母序）", "置顶", "置底"), addedPosition) { which ->
+            addedPosition = which
+            getSharedPreferences("QuickPrefs", Context.MODE_PRIVATE).edit()
+                .putInt("added_position", which).apply()
+            buildSettingsPage()
+        }
     }
 
     private fun showHideAppsDialog() {
@@ -1752,6 +2109,25 @@ class MainActivity : AppCompatActivity() {
             tvCounter.text = "🚫 点击加入黑名单：已屏蔽 ${tempHiddenPkgs.size} 个"
         }
 
+        gridView.setOnItemLongClickListener { _, _, position, _ ->
+            val app = displayApps[position]
+            val pkg = app.activityInfo.packageName
+            val name = app.loadLabel(pm).toString()
+            AlertDialog.Builder(this)
+                .setTitle("卸载「$name」？")
+                .setMessage("会打开系统的卸载确认界面，确认后才会真正删除。\n\n$pkg")
+                .setPositiveButton("去卸载") { _, _ ->
+                    try {
+                        startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")))
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "系统不允许从这里卸载，请到设置里操作", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .setNegativeButton("取消", null)
+                .show()
+            true
+        }
+
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(tvCounter)
@@ -1804,12 +2180,44 @@ class MainActivity : AppCompatActivity() {
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dpToPx(8f).toFloat()
                     setColor(palette.cardSoft)
+                    if (i == swapIndex) {
+                        setStroke(dpToPx(2f), palette.accent)
+                    }
                 }
                 clipToOutline = true
                 app?.let { setImageDrawable(it.loadIcon(pm)) }
+                setOnClickListener { onPreviewTap(i) }
             }
             currentRow?.addView(iconView)
         }
+    }
+
+    /** 点第一下选中，点第二下和它换位置 */
+    private fun onPreviewTap(index: Int) {
+        if (swapIndex < 0) {
+            swapIndex = index
+            fillPreview(previewContainer)
+            if (::appsPreviewContainer.isInitialized) fillPreview(appsPreviewContainer)
+            Toast.makeText(this, "再点另一个图标，两者交换位置", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (swapIndex == index) {
+            swapIndex = -1
+            if (::previewContainer.isInitialized) fillPreview(previewContainer)
+            if (::appsPreviewContainer.isInitialized) fillPreview(appsPreviewContainer)
+            return
+        }
+        if (swapIndex >= selectedApps.size || index >= selectedApps.size) {
+            swapIndex = -1
+            return
+        }
+        val tmp = selectedApps[swapIndex]
+        selectedApps[swapIndex] = selectedApps[index]
+        selectedApps[index] = tmp
+        swapIndex = -1
+        saveData()
+        refreshUI()
+        Toast.makeText(this, "已交换位置", Toast.LENGTH_SHORT).show()
     }
 
     private fun refreshUI() {
